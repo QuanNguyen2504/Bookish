@@ -1,0 +1,26 @@
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Build
+target/
+build/
+*.class
+*.jar
+
+# Secrets
+**/application.properties
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Uploads
+uploads/
+
+# Ngrok (không cần push)
+ngrok-v3-stable-windows-amd64/
+
+# Image folder (nếu là ảnh upload, không cần push)
+image/

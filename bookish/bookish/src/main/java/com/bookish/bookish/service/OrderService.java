@@ -1,0 +1,432 @@
+package com.bookish.bookish.service;
+
+import com.bookish.bookish.dto.request.CheckoutRequest;
+import com.bookish.bookish.dto.request.UpdateOrderRequest;
+import com.bookish.bookish.dto.response.AppliedPromotionResponse;
+import com.bookish.bookish.dto.response.BulkConfirmResponse;
+import com.bookish.bookish.dto.response.OrderItemResponse;
+import com.bookish.bookish.dto.response.OrderResponse;
+import com.bookish.bookish.entity.*;
+import com.bookish.bookish.repository.*;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+public class OrderService {
+
+    private final OrderRepository orderRepository;
+    private final OrderItemRepository orderItemRepository;
+    private final CartItemRepository cartItemRepository;
+    private final UserRepository userRepository;
+    private final PromotionRepository promotionRepository;
+    private final BookRepository bookRepository;
+    private final OrderNotificationService orderNotificationService;
+    private final PromotionService promotionService;
+
+    private static final int QR_EXPIRY_MINUTES = 4;
+    private static final BigDecimal SHIPPING_FEE = BigDecimal.valueOf(50000);
+
+    @Transactional
+    public OrderResponse checkout(Integer userId, CheckoutRequest req) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User không tồn tại"));
+
+        List<CartItem> selectedItems = cartItemRepository
+                .findAllByIdsAndUserId(req.getCartItemIds(), userId);
+
+        if (selectedItems.isEmpty())
+            throw new RuntimeException("Không có sản phẩm nào được chọn");
+
+        BigDecimal subtotal = selectedItems.stream()
+                .map(item -> {
+                    int sale = item.getBook().getSalePercent() == null ? 0 : item.getBook().getSalePercent();
+                    BigDecimal finalPrice = item.getBook().getPrice()
+                            .multiply(BigDecimal.ONE.subtract(
+                                    BigDecimal.valueOf(sale).divide(BigDecimal.valueOf(100))));
+                    return finalPrice.multiply(BigDecimal.valueOf(item.getQuantity()));
+                })
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal shippingFee = SHIPPING_FEE;
+
+        Order order = Order.builder()
+                .user(user)
+                .status("PENDING")
+                .shippingAddress(req.getShippingAddress())
+                .phone(req.getPhone())
+                .paymentMethod(req.getPaymentMethod() != null ? req.getPaymentMethod() : "CASH")
+                .subtotal(subtotal)
+                .discountAmount(BigDecimal.ZERO)
+                .shippingFee(shippingFee)
+                .totalPrice(subtotal.add(shippingFee))
+                .createdAt(LocalDateTime.now())
+                .orderPromotions(new ArrayList<>())
+                .build();
+        orderRepository.save(order);
+
+        BigDecimal totalDiscount = BigDecimal.ZERO;
+        boolean hasFreeship = false;
+
+        if (req.getPromotionIds() != null && !req.getPromotionIds().isEmpty()) {
+            for (Integer promotionId : req.getPromotionIds()) {
+                Promotion promotion = promotionRepository.findById(promotionId)
+                        .orElseThrow(() -> new RuntimeException("Mã giảm giá không tồn tại: " + promotionId));
+
+                BigDecimal discount = promotionService.applyOnOrder(
+                        promotion.getPromotion_id(),
+                        userId,
+                        order.getOrderId(),
+                        subtotal,
+                        shippingFee
+                );
+
+                OrderPromotion op = OrderPromotion.builder()
+                        .order(order)
+                        .promotion(promotion)
+                        .discountType(promotion.getDiscountType())
+                        .discountAmount(discount)
+                        .build();
+                order.getOrderPromotions().add(op);
+
+                if (promotion.getDiscountType() == DiscountType.FREESHIP) {
+                    hasFreeship = true;
+                } else {
+                    totalDiscount = totalDiscount.add(discount);
+                }
+            }
+        }
+
+        totalDiscount = totalDiscount.min(subtotal);
+        BigDecimal finalShipping = hasFreeship ? BigDecimal.ZERO : shippingFee;
+
+        order.setDiscountAmount(totalDiscount);
+        order.setShippingFee(finalShipping);
+        order.setTotalPrice(subtotal.subtract(totalDiscount).add(finalShipping));
+        orderRepository.save(order);
+
+        final Order finalOrder = order;
+        List<OrderItem> orderItems = selectedItems.stream().map(cartItem -> {
+            int sale = cartItem.getBook().getSalePercent() == null ? 0 : cartItem.getBook().getSalePercent();
+            BigDecimal finalPrice = cartItem.getBook().getPrice()
+                    .multiply(BigDecimal.ONE.subtract(
+                            BigDecimal.valueOf(sale).divide(BigDecimal.valueOf(100))));
+            return OrderItem.builder()
+                    .order(finalOrder)
+                    .book(cartItem.getBook())
+                    .quantity(cartItem.getQuantity())
+                    .price(finalPrice)
+                    .build();
+        }).toList();
+        orderItemRepository.saveAll(orderItems);
+        orderNotificationService.notifyNewOrder(order, orderItems);
+
+        if (!"QR_CODE".equals(order.getPaymentMethod())) {
+            cartItemRepository.deleteAll(selectedItems);
+        }
+
+        return toResponse(order, orderItems);
+    }
+
+    @Transactional(readOnly = true)
+    public List<OrderResponse> getOrdersByUser(Integer userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User không tồn tại"));
+        return orderRepository.findByUserOrderByCreatedAtDesc(user).stream()
+                .map(o -> toResponse(o, orderItemRepository.findByOrder(o)))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public OrderResponse getOrderById(Integer userId, Integer orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Đơn hàng không tồn tại"));
+        if (!order.getUser().getId().equals(userId))
+            throw new RuntimeException("Không có quyền xem đơn hàng này");
+        return toResponse(order, orderItemRepository.findByOrder(order));
+    }
+
+    @Transactional
+    public OrderResponse cancelOrder(Integer userId, Integer orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Đơn hàng không tồn tại"));
+        if (!order.getUser().getId().equals(userId))
+            throw new RuntimeException("Không có quyền hủy đơn hàng này");
+        if (!"PENDING".equals(order.getStatus()))
+            throw new RuntimeException("Chỉ có thể hủy đơn hàng đang chờ xác nhận");
+
+        if (order.getOrderPromotions() != null) {
+            for (OrderPromotion op : order.getOrderPromotions()) {
+                promotionService.refundOnCancel(op.getPromotion(), userId);
+            }
+        }
+
+        order.setStatus("CANCELLED");
+        orderRepository.save(order);
+        return toResponse(order, orderItemRepository.findByOrder(order));
+    }
+
+    @Transactional
+    public OrderResponse confirmPayment(Integer orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Đơn hàng không tồn tại"));
+        if (!"PENDING".equals(order.getStatus()))
+            throw new RuntimeException("Đơn hàng không ở trạng thái PENDING");
+        if (!"QR_CODE".equals(order.getPaymentMethod()))
+            throw new RuntimeException("Chỉ áp dụng cho đơn hàng thanh toán QR Code");
+
+        if (order.getCreatedAt().plusMinutes(QR_EXPIRY_MINUTES).isBefore(LocalDateTime.now())) {
+            order.setStatus("CANCELLED");
+            orderRepository.save(order);
+            throw new RuntimeException("Đơn hàng đã hết hạn thanh toán QR Code");
+        }
+
+        List<OrderItem> items = orderItemRepository.findByOrder(order);
+        deductStock(items);
+
+        Integer userId = order.getUser().getId();
+        items.forEach(oi ->
+                cartItemRepository.deleteByBookAndUserId(oi.getBook(), userId)
+        );
+
+        order.setStatus("PROCESSING");
+        orderRepository.save(order);
+        return toResponse(order, items);
+    }
+
+    @Transactional
+    public OrderResponse confirmShipping(Integer orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Đơn hàng không tồn tại"));
+        if (!"PROCESSING".equals(order.getStatus()))
+            throw new RuntimeException("Chỉ có thể chuyển sang SHIPPING từ PROCESSING");
+
+        order.setStatus("SHIPPING");
+        orderRepository.save(order);
+        return toResponse(order, orderItemRepository.findByOrder(order));
+    }
+
+    @Transactional
+    public OrderResponse confirmDelivered(Integer userId, Integer orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Đơn hàng không tồn tại"));
+        if (!order.getUser().getId().equals(userId))
+            throw new RuntimeException("Không có quyền cập nhật đơn hàng này");
+        if (!"SHIPPING".equals(order.getStatus()))
+            throw new RuntimeException("Chỉ có thể xác nhận khi đơn hàng đang được giao");
+        order.setStatus("DELIVERED");
+        orderRepository.save(order);
+        return toResponse(order, orderItemRepository.findByOrder(order));
+    }
+
+    @Transactional
+    public OrderResponse updateOrder(Integer userId, Integer orderId, UpdateOrderRequest req) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Đơn hàng không tồn tại"));
+        if (!order.getUser().getId().equals(userId))
+            throw new RuntimeException("Không có quyền cập nhật đơn hàng này");
+        if (!"PENDING".equals(order.getStatus()))
+            throw new RuntimeException("Chỉ có thể cập nhật đơn hàng đang chờ xác nhận");
+        if (req.getShippingAddress() != null) order.setShippingAddress(req.getShippingAddress());
+        if (req.getPhone() != null) order.setPhone(req.getPhone());
+        orderRepository.save(order);
+        return toResponse(order, orderItemRepository.findByOrder(order));
+    }
+
+    // ============================================================
+    // 🔥 BULK CONFIRM: PENDING CASH → PROCESSING + trừ kho
+    // ============================================================
+
+    public BulkConfirmResponse bulkConfirm(List<Integer> orderIds) {
+        List<Order> candidates;
+
+        if (orderIds == null || orderIds.isEmpty()) {
+            candidates = orderRepository.findByStatusAndPaymentMethod("PENDING", "CASH");
+        } else {
+            candidates = orderRepository.findAllById(orderIds);
+        }
+
+        List<Integer> confirmedIds = new ArrayList<>();
+        List<BulkConfirmResponse.FailedOrder> failed = new ArrayList<>();
+
+        for (Order order : candidates) {
+            if (!"PENDING".equals(order.getStatus())) {
+                failed.add(BulkConfirmResponse.FailedOrder.builder()
+                        .orderId(order.getOrderId())
+                        .reason("Đơn hàng không ở trạng thái PENDING")
+                        .build());
+                continue;
+            }
+            if (!"CASH".equals(order.getPaymentMethod())) {
+                failed.add(BulkConfirmResponse.FailedOrder.builder()
+                        .orderId(order.getOrderId())
+                        .reason("Chỉ hỗ trợ xác nhận hàng loạt cho đơn CASH")
+                        .build());
+                continue;
+            }
+
+            try {
+                confirmSingleForBulk(order.getOrderId());
+                confirmedIds.add(order.getOrderId());
+            } catch (Exception e) {
+                failed.add(BulkConfirmResponse.FailedOrder.builder()
+                        .orderId(order.getOrderId())
+                        .reason(e.getMessage())
+                        .build());
+            }
+        }
+
+        return BulkConfirmResponse.builder()
+                .successCount(confirmedIds.size())
+                .failedCount(failed.size())
+                .confirmedOrderIds(confirmedIds)
+                .failedOrders(failed)
+                .build();
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void confirmSingleForBulk(Integer orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Đơn hàng không tồn tại"));
+
+        if (!"PENDING".equals(order.getStatus())) {
+            throw new RuntimeException("Đơn hàng không còn ở trạng thái PENDING");
+        }
+        if (!"CASH".equals(order.getPaymentMethod())) {
+            throw new RuntimeException("Chỉ hỗ trợ xác nhận hàng loạt cho đơn CASH");
+        }
+
+        List<OrderItem> items = orderItemRepository.findByOrder(order);
+        deductStock(items);
+
+        String oldStatus = order.getStatus();
+        order.setStatus("PROCESSING");
+        orderRepository.save(order);
+
+        try {
+            orderNotificationService.notifyOrderStatusChanged(order, oldStatus, "PROCESSING");
+        } catch (Exception ignored) {}
+    }
+
+    // ============================================================
+    // 🔥 BULK SHIP: PROCESSING → SHIPPING (không trừ kho, đã trừ rồi)
+    // ============================================================
+
+    public BulkConfirmResponse bulkShip(List<Integer> orderIds) {
+        List<Order> candidates;
+
+        if (orderIds == null || orderIds.isEmpty()) {
+            candidates = orderRepository.findByStatus("PROCESSING");
+        } else {
+            candidates = orderRepository.findAllById(orderIds);
+        }
+
+        List<Integer> shippedIds = new ArrayList<>();
+        List<BulkConfirmResponse.FailedOrder> failed = new ArrayList<>();
+
+        for (Order order : candidates) {
+            if (!"PROCESSING".equals(order.getStatus())) {
+                failed.add(BulkConfirmResponse.FailedOrder.builder()
+                        .orderId(order.getOrderId())
+                        .reason("Đơn hàng không ở trạng thái PROCESSING")
+                        .build());
+                continue;
+            }
+
+            try {
+                shipSingleForBulk(order.getOrderId());
+                shippedIds.add(order.getOrderId());
+            } catch (Exception e) {
+                failed.add(BulkConfirmResponse.FailedOrder.builder()
+                        .orderId(order.getOrderId())
+                        .reason(e.getMessage())
+                        .build());
+            }
+        }
+
+        return BulkConfirmResponse.builder()
+                .successCount(shippedIds.size())
+                .failedCount(failed.size())
+                .confirmedOrderIds(shippedIds)
+                .failedOrders(failed)
+                .build();
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void shipSingleForBulk(Integer orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Đơn hàng không tồn tại"));
+
+        if (!"PROCESSING".equals(order.getStatus())) {
+            throw new RuntimeException("Đơn hàng không còn ở trạng thái PROCESSING");
+        }
+
+        String oldStatus = order.getStatus();
+        order.setStatus("SHIPPING");
+        orderRepository.save(order);
+
+        try {
+            orderNotificationService.notifyOrderStatusChanged(order, oldStatus, "SHIPPING");
+        } catch (Exception ignored) {}
+    }
+
+    // ============================================================
+
+    private void deductStock(List<OrderItem> items) {
+        for (OrderItem item : items) {
+            Book book = item.getBook();
+            int newStock = book.getStock() - item.getQuantity();
+            if (newStock < 0)
+                throw new RuntimeException("Sách \"" + book.getTitle() + "\" không đủ tồn kho");
+            book.setStock(newStock);
+            bookRepository.save(book);
+        }
+    }
+
+    private OrderResponse toResponse(Order order, List<OrderItem> items) {
+        List<OrderItemResponse> itemResponses = items.stream().map(oi ->
+                OrderItemResponse.builder()
+                        .orderItemId(oi.getOrderItemId())
+                        .bookId(oi.getBook().getBook_id())
+                        .title(oi.getBook().getTitle())
+                        .image(oi.getBook().getImage())
+                        .quantity(oi.getQuantity())
+                        .price(oi.getPrice())
+                        .subtotal(oi.getPrice().multiply(BigDecimal.valueOf(oi.getQuantity())))
+                        .build()
+        ).toList();
+
+        List<AppliedPromotionResponse> promos = order.getOrderPromotions() == null
+                ? List.of()
+                : order.getOrderPromotions().stream()
+                .map(op -> AppliedPromotionResponse.builder()
+                        .promotionId(op.getPromotion().getPromotion_id())
+                        .code(op.getPromotion().getCode())
+                        .discountType(op.getDiscountType())
+                        .discountAmount(op.getDiscountAmount())
+                        .build())
+                .toList();
+
+        return OrderResponse.builder()
+                .orderId(order.getOrderId())
+                .status(order.getStatus())
+                .shippingAddress(order.getShippingAddress())
+                .phone(order.getPhone())
+                .paymentMethod(order.getPaymentMethod())
+                .subtotal(order.getSubtotal())
+                .discountAmount(order.getDiscountAmount())
+                .shippingFee(order.getShippingFee())
+                .totalPrice(order.getTotalPrice())
+                .createdAt(order.getCreatedAt())
+                .items(itemResponses)
+                .promotions(promos)
+                .build();
+    }
+}
