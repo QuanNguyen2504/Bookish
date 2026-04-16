@@ -99,12 +99,12 @@ public class UserService {
 
     public void changePassword(Integer userId, ChangePasswordRequest req) {
         if (!req.getNewPassword().equals(req.getConfirmPassword())) {
-            throw new RuntimeException("Mật khẩu xác nhận không khớp");
+            throw new AppException(ErrorCode.PASSWORD_CONFIRM_MISMATCH);
         }
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
         if (!passwordEncoder.matches(req.getCurrentPassword(), user.getPassword())) {
-            throw new RuntimeException("Mật khẩu hiện tại không đúng");
+            throw new AppException(ErrorCode.PASSWORD_INCORRECT);
         }
         user.setPassword(passwordEncoder.encode(req.getNewPassword()));
         userRepository.save(user);

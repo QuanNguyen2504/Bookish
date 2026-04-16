@@ -6,6 +6,8 @@ import com.bookish.bookish.entity.Order;
 import com.bookish.bookish.entity.OrderItem;
 import com.bookish.bookish.repository.OrderItemRepository;
 import com.bookish.bookish.repository.OrderRepository;
+import com.bookish.bookish.exception.AppException;
+import com.bookish.bookish.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,10 +35,10 @@ public class AdminOrderService {
     @Transactional
     public OrderResponse updateStatus(Integer orderId, String status) {
         if (!VALID_STATUSES.contains(status.toUpperCase())) {
-            throw new RuntimeException("Trạng thái không hợp lệ: " + status);
+            throw new AppException(ErrorCode.ORDER_INVALID_STATUS);
         }
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Đơn hàng không tồn tại"));
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
         order.setStatus(status.toUpperCase());
         orderRepository.save(order);
         return toResponse(order, orderItemRepository.findByOrder(order));

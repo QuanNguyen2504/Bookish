@@ -65,7 +65,34 @@ public enum ErrorCode {
     PROMOTION_TYPE_CONFLICT(400, "Chỉ được áp dụng 1 mã cho mỗi loại khuyến mãi", HttpStatus.BAD_REQUEST),
 
     // ORDER
-    ORDER_NOT_FOUND(404, "Không tìm thấy đơn hàng", HttpStatus.NOT_FOUND);
+    ORDER_NOT_FOUND(404, "Không tìm thấy đơn hàng", HttpStatus.NOT_FOUND),
+    ORDER_EMPTY_ITEMS(400, "Không có sản phẩm nào được chọn", HttpStatus.BAD_REQUEST),
+    ORDER_ACCESS_DENIED(403, "Không có quyền truy cập đơn hàng này", HttpStatus.FORBIDDEN),
+    ORDER_INVALID_STATUS(400, "Trạng thái đơn hàng không hợp lệ", HttpStatus.BAD_REQUEST),
+    ORDER_CANCEL_NOT_ALLOWED(400, "Chỉ có thể hủy đơn hàng đang chờ xác nhận", HttpStatus.BAD_REQUEST),
+    ORDER_PAYMENT_EXPIRED(400, "Đơn hàng đã hết hạn thanh toán QR Code", HttpStatus.BAD_REQUEST),
+    ORDER_NOT_QR_PAYMENT(400, "Chỉ áp dụng cho đơn hàng thanh toán QR Code", HttpStatus.BAD_REQUEST),
+    ORDER_NOT_PENDING(400, "Đơn hàng không ở trạng thái chờ xác nhận", HttpStatus.BAD_REQUEST),
+    ORDER_NOT_PROCESSING(400, "Đơn hàng không ở trạng thái đang xử lý", HttpStatus.BAD_REQUEST),
+    ORDER_NOT_SHIPPING(400, "Chỉ có thể xác nhận khi đơn hàng đang được giao", HttpStatus.BAD_REQUEST),
+    ORDER_ONLY_PENDING_UPDATE(400, "Chỉ có thể cập nhật đơn hàng đang chờ xác nhận", HttpStatus.BAD_REQUEST),
+    ORDER_BULK_CASH_ONLY(400, "Chỉ hỗ trợ xác nhận hàng loạt cho đơn COD", HttpStatus.BAD_REQUEST),
+
+    // CART
+    CART_ITEM_NOT_FOUND(404, "Không tìm thấy sản phẩm trong giỏ hàng", HttpStatus.NOT_FOUND),
+
+    // BOOK (bổ sung)
+    BOOK_DELETED(400, "Sách này đã bị xóa khỏi cửa hàng", HttpStatus.BAD_REQUEST),
+    BOOK_OUT_OF_STOCK(400, "Sách không đủ số lượng trong kho", HttpStatus.BAD_REQUEST),
+    BOOK_HAS_ACTIVE_ORDERS(409, "Không thể xóa sách vì đang có đơn hàng chưa hoàn thành", HttpStatus.CONFLICT),
+
+    // REVIEW
+    REVIEW_NOT_PURCHASED(400, "Bạn cần mua và nhận hàng trước khi đánh giá", HttpStatus.BAD_REQUEST),
+    REVIEW_ALREADY_EXISTS(409, "Bạn đã đánh giá cuốn sách này rồi", HttpStatus.CONFLICT),
+
+    // PASSWORD
+    PASSWORD_CONFIRM_MISMATCH(400, "Mật khẩu xác nhận không khớp", HttpStatus.BAD_REQUEST),
+    PASSWORD_INCORRECT(400, "Mật khẩu hiện tại không đúng", HttpStatus.BAD_REQUEST);
 
 
 

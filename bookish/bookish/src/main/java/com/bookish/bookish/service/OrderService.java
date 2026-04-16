@@ -8,6 +8,8 @@ import com.bookish.bookish.dto.response.OrderItemResponse;
 import com.bookish.bookish.dto.response.OrderResponse;
 import com.bookish.bookish.entity.*;
 import com.bookish.bookish.repository.*;
+import com.bookish.bookish.exception.AppException;
+import com.bookish.bookish.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -37,13 +39,13 @@ public class OrderService {
     @Transactional
     public OrderResponse checkout(Integer userId, CheckoutRequest req) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User không tồn tại"));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
         List<CartItem> selectedItems = cartItemRepository
                 .findAllByIdsAndUserId(req.getCartItemIds(), userId);
 
         if (selectedItems.isEmpty())
-            throw new RuntimeException("Không có sản phẩm nào được chọn");
+            throw new AppException(ErrorCode.ORDER_EMPTY_ITEMS);
 
         BigDecimal subtotal = selectedItems.stream()
                 .map(item -> {
@@ -78,7 +80,7 @@ public class OrderService {
         if (req.getPromotionIds() != null && !req.getPromotionIds().isEmpty()) {
             for (Integer promotionId : req.getPromotionIds()) {
                 Promotion promotion = promotionRepository.findById(promotionId)
-                        .orElseThrow(() -> new RuntimeException("Mã giảm giá không tồn tại: " + promotionId));
+                        .orElseThrow(() -> new AppException(ErrorCode.PROMOTION_NOT_FOUND));
 
                 BigDecimal discount = promotionService.applyOnOrder(
                         promotion.getPromotion_id(),
@@ -138,7 +140,7 @@ public class OrderService {
     @Transactional(readOnly = true)
     public List<OrderResponse> getOrdersByUser(Integer userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User không tồn tại"));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
         return orderRepository.findByUserOrderByCreatedAtDesc(user).stream()
                 .map(o -> toResponse(o, orderItemRepository.findByOrder(o)))
                 .toList();
@@ -147,22 +149,54 @@ public class OrderService {
     @Transactional(readOnly = true)
     public OrderResponse getOrderById(Integer userId, Integer orderId) {
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Đơn hàng không tồn tại"));
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
         if (!order.getUser().getId().equals(userId))
-            throw new RuntimeException("Không có quyền xem đơn hàng này");
+            throw new AppException(ErrorCode.ORDER_ACCESS_DENIED);
         return toResponse(order, orderItemRepository.findByOrder(order));
     }
 
     @Transactional
     public OrderResponse cancelOrder(Integer userId, Integer orderId) {
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Đơn hàng không tồn tại"));
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
         if (!order.getUser().getId().equals(userId))
-            throw new RuntimeException("Không có quyền hủy đơn hàng này");
+            throw new AppException(ErrorCode.ORDER_ACCESS_DENIED);
         if (!"PENDING".equals(order.getStatus()))
-            throw new RuntimeException("Chỉ có thể hủy đơn hàng đang chờ xác nhận");
+            throw new AppException(ErrorCode.ORDER_CANCEL_NOT_ALLOWED);
 
         if (order.getOrderPromotions() != null) {
+            for (OrderPromotion op : order.getOrderPromotions()) {
+                promotionService.refundOnCancel(op.getPromotion(), userId);
+            }
+        }
+
+        order.setStatus("CANCELLED");
+        orderRepository.save(order);
+        return toResponse(order, orderItemRepository.findByOrder(order));
+    }
+
+    /**
+     * Admin hủy đơn hàng — không cần kiểm tra userId
+     * Cho phép hủy PENDING và PROCESSING (hoàn kho nếu đã trừ)
+     */
+    @Transactional
+    public OrderResponse adminCancelOrder(Integer orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+
+        String status = order.getStatus();
+        if ("CANCELLED".equals(status) || "DELIVERED".equals(status) || "SHIPPING".equals(status))
+            throw new AppException(ErrorCode.ORDER_CANCEL_NOT_ALLOWED);
+
+        // Nếu PROCESSING → đã trừ kho rồi → hoàn lại
+        if ("PROCESSING".equals(status)) {
+            List<OrderItem> items = orderItemRepository.findByOrder(order);
+            restoreStock(items);
+        }
+
+        // Hoàn mã khuyến mãi
+        if (order.getOrderPromotions() != null) {
+            Integer userId = order.getUser().getId();
             for (OrderPromotion op : order.getOrderPromotions()) {
                 promotionService.refundOnCancel(op.getPromotion(), userId);
             }
@@ -176,16 +210,16 @@ public class OrderService {
     @Transactional
     public OrderResponse confirmPayment(Integer orderId) {
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Đơn hàng không tồn tại"));
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
         if (!"PENDING".equals(order.getStatus()))
-            throw new RuntimeException("Đơn hàng không ở trạng thái PENDING");
+            throw new AppException(ErrorCode.ORDER_NOT_PENDING);
         if (!"QR_CODE".equals(order.getPaymentMethod()))
-            throw new RuntimeException("Chỉ áp dụng cho đơn hàng thanh toán QR Code");
+            throw new AppException(ErrorCode.ORDER_NOT_QR_PAYMENT);
 
         if (order.getCreatedAt().plusMinutes(QR_EXPIRY_MINUTES).isBefore(LocalDateTime.now())) {
             order.setStatus("CANCELLED");
             orderRepository.save(order);
-            throw new RuntimeException("Đơn hàng đã hết hạn thanh toán QR Code");
+            throw new AppException(ErrorCode.ORDER_PAYMENT_EXPIRED);
         }
 
         List<OrderItem> items = orderItemRepository.findByOrder(order);
@@ -204,9 +238,9 @@ public class OrderService {
     @Transactional
     public OrderResponse confirmShipping(Integer orderId) {
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Đơn hàng không tồn tại"));
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
         if (!"PROCESSING".equals(order.getStatus()))
-            throw new RuntimeException("Chỉ có thể chuyển sang SHIPPING từ PROCESSING");
+            throw new AppException(ErrorCode.ORDER_NOT_PROCESSING);
 
         order.setStatus("SHIPPING");
         orderRepository.save(order);
@@ -216,11 +250,11 @@ public class OrderService {
     @Transactional
     public OrderResponse confirmDelivered(Integer userId, Integer orderId) {
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Đơn hàng không tồn tại"));
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
         if (!order.getUser().getId().equals(userId))
-            throw new RuntimeException("Không có quyền cập nhật đơn hàng này");
+            throw new AppException(ErrorCode.ORDER_ACCESS_DENIED);
         if (!"SHIPPING".equals(order.getStatus()))
-            throw new RuntimeException("Chỉ có thể xác nhận khi đơn hàng đang được giao");
+            throw new AppException(ErrorCode.ORDER_NOT_SHIPPING);
         order.setStatus("DELIVERED");
         orderRepository.save(order);
         return toResponse(order, orderItemRepository.findByOrder(order));
@@ -229,11 +263,11 @@ public class OrderService {
     @Transactional
     public OrderResponse updateOrder(Integer userId, Integer orderId, UpdateOrderRequest req) {
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Đơn hàng không tồn tại"));
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
         if (!order.getUser().getId().equals(userId))
-            throw new RuntimeException("Không có quyền cập nhật đơn hàng này");
+            throw new AppException(ErrorCode.ORDER_ACCESS_DENIED);
         if (!"PENDING".equals(order.getStatus()))
-            throw new RuntimeException("Chỉ có thể cập nhật đơn hàng đang chờ xác nhận");
+            throw new AppException(ErrorCode.ORDER_ONLY_PENDING_UPDATE);
         if (req.getShippingAddress() != null) order.setShippingAddress(req.getShippingAddress());
         if (req.getPhone() != null) order.setPhone(req.getPhone());
         orderRepository.save(order);
@@ -294,13 +328,13 @@ public class OrderService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void confirmSingleForBulk(Integer orderId) {
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Đơn hàng không tồn tại"));
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
 
         if (!"PENDING".equals(order.getStatus())) {
-            throw new RuntimeException("Đơn hàng không còn ở trạng thái PENDING");
+            throw new AppException(ErrorCode.ORDER_NOT_PENDING);
         }
         if (!"CASH".equals(order.getPaymentMethod())) {
-            throw new RuntimeException("Chỉ hỗ trợ xác nhận hàng loạt cho đơn CASH");
+            throw new AppException(ErrorCode.ORDER_BULK_CASH_ONLY);
         }
 
         List<OrderItem> items = orderItemRepository.findByOrder(order);
@@ -362,10 +396,10 @@ public class OrderService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void shipSingleForBulk(Integer orderId) {
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Đơn hàng không tồn tại"));
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
 
         if (!"PROCESSING".equals(order.getStatus())) {
-            throw new RuntimeException("Đơn hàng không còn ở trạng thái PROCESSING");
+            throw new AppException(ErrorCode.ORDER_NOT_PROCESSING);
         }
 
         String oldStatus = order.getStatus();
@@ -384,8 +418,16 @@ public class OrderService {
             Book book = item.getBook();
             int newStock = book.getStock() - item.getQuantity();
             if (newStock < 0)
-                throw new RuntimeException("Sách \"" + book.getTitle() + "\" không đủ tồn kho");
+                throw new AppException(ErrorCode.BOOK_OUT_OF_STOCK);
             book.setStock(newStock);
+            bookRepository.save(book);
+        }
+    }
+
+    private void restoreStock(List<OrderItem> items) {
+        for (OrderItem item : items) {
+            Book book = item.getBook();
+            book.setStock(book.getStock() + item.getQuantity());
             bookRepository.save(book);
         }
     }

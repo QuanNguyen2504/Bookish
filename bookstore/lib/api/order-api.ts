@@ -92,4 +92,8 @@ export const orderApi = {
 
   updateOrder: (orderId: number, req: UpdateOrderRequest, token: string) =>
     request<OrderResponse>(`/api/orders/${orderId}`, { method: 'PATCH', body: JSON.stringify(req) }, token),
+
+  // Admin hủy đơn (PENDING / PROCESSING, hoàn kho + hoàn mã)
+  adminCancelOrder: (orderId: number, token: string) =>
+    request<OrderResponse>(`/api/admin/orders/${orderId}/cancel`, { method: 'PATCH' }, token),
 };

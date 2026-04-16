@@ -7,6 +7,8 @@ import com.bookish.bookish.entity.Book;
 import com.bookish.bookish.entity.Category;
 import com.bookish.bookish.mapper.BookMapper;
 import com.bookish.bookish.repository.*;
+import com.bookish.bookish.exception.AppException;
+import com.bookish.bookish.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -41,7 +43,7 @@ public class BookService {
 
     public BookResponse getBookById(Integer id) {
         return toResponseWithRating(bookRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy sách với id: " + id)));
+                .orElseThrow(() -> new AppException(ErrorCode.BOOK_NOT_FOUND)));
     }
 
     public List<BookResponse> getAllBooks() {
@@ -89,7 +91,7 @@ public class BookService {
 
     public BookResponse updateBook(Integer id, BookRequest request) {
         Book book = bookRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy sách với id: " + id));
+                .orElseThrow(() -> new AppException(ErrorCode.BOOK_NOT_FOUND));
         book.setTitle(request.getTitle()); book.setDescription(request.getDescription());
         book.setPrice(request.getPrice()); book.setStock(request.getStock());
         book.setSalePercent(request.getSalePercent()); book.setImage(request.getImage());
@@ -103,14 +105,12 @@ public class BookService {
     @Transactional
     public void deleteBook(Integer id) {
         Book book = bookRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy sách với id: " + id));
+                .orElseThrow(() -> new AppException(ErrorCode.BOOK_NOT_FOUND));
 
         // Kiểm tra đơn hàng đang hoạt động
         long activeOrders = orderItemRepository.countActiveOrdersByBook(book);
         if (activeOrders > 0) {
-            throw new RuntimeException(
-                    "Không thể xóa sách \"" + book.getTitle() + "\" vì đang có " + activeOrders + " đơn hàng chưa hoàn thành"
-            );
+            throw new AppException(ErrorCode.BOOK_HAS_ACTIVE_ORDERS);
         }
 
         // Soft delete — không xóa thật, chỉ đánh dấu

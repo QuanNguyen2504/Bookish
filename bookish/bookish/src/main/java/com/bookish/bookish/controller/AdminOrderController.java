@@ -31,11 +31,13 @@ public class AdminOrderController {
         return ResponseEntity.ok(adminOrderService.updateStatus(orderId, status));
     }
 
-    /**
-     * 🔥 POST /api/admin/orders/bulk-confirm
-     * Body: { "orderIds": [1, 2, 3] } hoặc {} để confirm tất cả CASH PENDING
-     * PENDING → PROCESSING (trừ kho)
-     */
+
+    @PatchMapping("/{orderId}/cancel")
+    public ResponseEntity<OrderResponse> adminCancelOrder(@PathVariable Integer orderId) {
+        return ResponseEntity.ok(orderService.adminCancelOrder(orderId));
+    }
+
+
     @PostMapping("/bulk-confirm")
     public ResponseEntity<BulkConfirmResponse> bulkConfirm(
             @RequestBody(required = false) BulkConfirmRequest req) {
@@ -43,11 +45,7 @@ public class AdminOrderController {
         return ResponseEntity.ok(orderService.bulkConfirm(ids));
     }
 
-    /**
-     *  POST /api/admin/orders/bulk-ship
-     * Body: { "orderIds": [1, 2, 3] } hoặc {} để ship tất cả PROCESSING
-     * PROCESSING → SHIPPING (không trừ kho, đã trừ ở bước trước)
-     */
+
     @PostMapping("/bulk-ship")
     public ResponseEntity<BulkConfirmResponse> bulkShip(
             @RequestBody(required = false) BulkConfirmRequest req) {

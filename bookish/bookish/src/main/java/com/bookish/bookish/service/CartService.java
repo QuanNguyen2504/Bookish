@@ -12,6 +12,8 @@ import com.bookish.bookish.repository.BookRepository;
 import com.bookish.bookish.repository.CartItemRepository;
 import com.bookish.bookish.repository.CartRepository;
 import com.bookish.bookish.repository.UserRepository;
+import com.bookish.bookish.exception.AppException;
+import com.bookish.bookish.exception.ErrorCode;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -34,7 +36,7 @@ public class CartService {
 
     private Cart getOrCreateCart(Integer userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User không tồn tại"));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
         return cartRepository.findByUser(user).orElseGet(() -> {
             Cart cart = Cart.builder()
                     .user(user)
@@ -109,15 +111,15 @@ public class CartService {
     public CartResponse addToCart(Integer userId, AddToCartRequest req) {
         Cart cart = getOrCreateCart(userId);
         Book book = bookRepository.findById(req.getBookId())
-                .orElseThrow(() -> new RuntimeException("Sách không tồn tại"));
+                .orElseThrow(() -> new AppException(ErrorCode.BOOK_NOT_FOUND));
 
         // Không cho thêm sách đã bị xóa vào giỏ
         if (Boolean.TRUE.equals(book.getDeleted())) {
-            throw new RuntimeException("Sách này đã bị xóa khỏi cửa hàng");
+            throw new AppException(ErrorCode.BOOK_DELETED);
         }
 
         if (book.getStock() < req.getQuantity())
-            throw new RuntimeException("Sách không đủ số lượng trong kho");
+            throw new AppException(ErrorCode.BOOK_OUT_OF_STOCK);
 
         CartItem item = cartItemRepository.findByCartAndBook(cart, book)
                 .orElseGet(() -> CartItem.builder()
@@ -138,7 +140,7 @@ public class CartService {
     public CartResponse updateQuantity(Integer userId, Integer cartItemId,
                                        UpdateCartItemRequest req) {
         CartItem item = cartItemRepository.findById(cartItemId)
-                .orElseThrow(() -> new RuntimeException("Item không tồn tại"));
+                .orElseThrow(() -> new AppException(ErrorCode.CART_ITEM_NOT_FOUND));
         Cart cart = item.getCart();
 
         if (req.getQuantity() <= 0) {
@@ -147,10 +149,10 @@ public class CartService {
         } else {
             // Không cho cập nhật sách đã bị xóa
             if (Boolean.TRUE.equals(item.getBook().getDeleted())) {
-                throw new RuntimeException("Sách này đã bị xóa khỏi cửa hàng");
+                throw new AppException(ErrorCode.BOOK_DELETED);
             }
             if (item.getBook().getStock() < req.getQuantity())
-                throw new RuntimeException("Không đủ hàng trong kho");
+                throw new AppException(ErrorCode.BOOK_OUT_OF_STOCK);
             item.setQuantity(req.getQuantity());
             cartItemRepository.save(item);
         }
@@ -163,7 +165,7 @@ public class CartService {
     @Transactional
     public CartResponse removeItem(Integer userId, Integer cartItemId) {
         CartItem item = cartItemRepository.findById(cartItemId)
-                .orElseThrow(() -> new RuntimeException("Item không tồn tại"));
+                .orElseThrow(() -> new AppException(ErrorCode.CART_ITEM_NOT_FOUND));
         Cart cart = item.getCart();
 
         cart.getItems().remove(item);

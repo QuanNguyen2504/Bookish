@@ -181,10 +181,13 @@ export default function AdminOrdersPage() {
 
   const handleCancelOrder = async (order: OrderResponse) => {
     if (!token) return;
-    if (!confirm('Bạn có chắc muốn hủy đơn hàng này không?')) return;
+    const msg = order.status === 'PROCESSING'
+      ? 'Đơn đang xử lý — hủy sẽ hoàn lại kho và mã khuyến mãi. Tiếp tục?'
+      : 'Bạn có chắc muốn hủy đơn hàng này không?';
+    if (!confirm(msg)) return;
     setUpdating(true);
     try {
-      const updated = await adminOrderApi.updateStatus(order.orderId, 'CANCELLED', token);
+      const updated = await orderApi.adminCancelOrder(order.orderId, token);
       setOrders(prev => prev.map(o => o.orderId === updated.orderId ? updated : o));
       setSelected(updated);
       toast.success('Đã hủy đơn hàng!');
@@ -569,7 +572,7 @@ export default function AdminOrdersPage() {
                     {updating ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
                     {NEXT_LABEL[selected.status]}
                   </Button>
-                  {selected.status === 'PENDING' && (
+                  {(selected.status === 'PENDING' || selected.status === 'PROCESSING') && (
                     <Button variant="outline" className="border-destructive text-destructive hover:bg-destructive hover:text-white"
                       onClick={() => handleCancelOrder(selected)} disabled={updating}>
                       Hủy đơn

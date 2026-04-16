@@ -3,20 +3,19 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  LayoutDashboard, BookOpen, FolderTree,
+  BookOpen, FolderTree,
   ShoppingCart, UserCircle, Ticket, BarChart3, LogOut, BookMarked,
 } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth-store';
 
 const menuItems = [
-  { title: 'Dashboard',           href: '/admin',            icon: LayoutDashboard },
+  { title: 'Thống kê',            href: '/admin',            icon: BarChart3 },
   { title: 'Quản lý Sách',        href: '/admin/books',      icon: BookOpen },
   { title: 'Quản lý Danh mục',    href: '/admin/categories', icon: FolderTree },
   { title: 'Quản lý Tác giả',     href: '/admin/authors',    icon: BookMarked },
   { title: 'Quản lý Đơn hàng',    href: '/admin/orders',     icon: ShoppingCart },
   { title: 'Quản lý Người dùng',  href: '/admin/users',      icon: UserCircle },
   { title: 'Quản lý Khuyến mãi',  href: '/admin/promotions', icon: Ticket },
-  { title: 'Báo cáo Thống kê',    href: '/admin/reports',    icon: BarChart3 },
 ];
 
 export function AdminSidebar() {

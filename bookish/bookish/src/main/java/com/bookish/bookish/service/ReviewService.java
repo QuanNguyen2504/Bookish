@@ -8,6 +8,8 @@ import com.bookish.bookish.entity.User;
 import com.bookish.bookish.repository.BookRepository;
 import com.bookish.bookish.repository.ReviewRepository;
 import com.bookish.bookish.repository.UserRepository;
+import com.bookish.bookish.exception.AppException;
+import com.bookish.bookish.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,7 +29,7 @@ public class ReviewService {
     @Transactional(readOnly = true)
     public List<ReviewResponse> getReviewsByBook(Integer bookId) {
         Book book = bookRepository.findById(bookId)
-                .orElseThrow(() -> new RuntimeException("Sách không tồn tại"));
+                .orElseThrow(() -> new AppException(ErrorCode.BOOK_NOT_FOUND));
         return reviewRepository.findByBookOrderByCreatedAtDesc(book)
                 .stream().map(this::toResponse).toList();
     }
@@ -36,9 +38,9 @@ public class ReviewService {
     @Transactional(readOnly = true)
     public boolean hasReviewed(Integer userId, Integer bookId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User không tồn tại"));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
         Book book = bookRepository.findById(bookId)
-                .orElseThrow(() -> new RuntimeException("Sách không tồn tại"));
+                .orElseThrow(() -> new AppException(ErrorCode.BOOK_NOT_FOUND));
         return reviewRepository.existsByUserAndBook(user, book);
     }
 
@@ -46,9 +48,9 @@ public class ReviewService {
     @Transactional(readOnly = true)
     public boolean canReview(Integer userId, Integer bookId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User không tồn tại"));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
         Book book = bookRepository.findById(bookId)
-                .orElseThrow(() -> new RuntimeException("Sách không tồn tại"));
+                .orElseThrow(() -> new AppException(ErrorCode.BOOK_NOT_FOUND));
         return reviewRepository.hasPurchasedAndDelivered(user, book);
     }
 
@@ -56,18 +58,18 @@ public class ReviewService {
     @Transactional
     public ReviewResponse createReview(Integer userId, ReviewRequest req) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User không tồn tại"));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
         Book book = bookRepository.findById(req.getBookId())
-                .orElseThrow(() -> new RuntimeException("Sách không tồn tại"));
+                .orElseThrow(() -> new AppException(ErrorCode.BOOK_NOT_FOUND));
 
         // Kiểm tra đã mua và nhận hàng chưa
         if (!reviewRepository.hasPurchasedAndDelivered(user, book)) {
-            throw new RuntimeException("Bạn cần mua và nhận hàng trước khi đánh giá");
+            throw new AppException(ErrorCode.REVIEW_NOT_PURCHASED);
         }
 
         // Kiểm tra đã review chưa
         if (reviewRepository.existsByUserAndBook(user, book)) {
-            throw new RuntimeException("Bạn đã đánh giá cuốn sách này rồi");
+            throw new AppException(ErrorCode.REVIEW_ALREADY_EXISTS);
         }
 
         Review review = Review.builder()
@@ -85,7 +87,7 @@ public class ReviewService {
     @Transactional(readOnly = true)
     public double getAvgRating(Integer bookId) {
         Book book = bookRepository.findById(bookId)
-                .orElseThrow(() -> new RuntimeException("Sách không tồn tại"));
+                .orElseThrow(() -> new AppException(ErrorCode.BOOK_NOT_FOUND));
         Double avg = reviewRepository.findAvgRatingByBook(book);
         return avg != null ? Math.round(avg * 10.0) / 10.0 : 0;
     }

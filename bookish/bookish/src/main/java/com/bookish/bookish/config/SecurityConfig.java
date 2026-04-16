@@ -37,7 +37,11 @@ public class SecurityConfig {
                         .requestMatchers("/books").permitAll()
                         .requestMatchers("/books/*").permitAll()
                         .requestMatchers("/uploads/**").permitAll()
-                        .requestMatchers("/promotions/**").permitAll()
+                        // PROMOTIONS — GET public, validate cần login, CUD chỉ ADMIN/STAFF
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/promotions").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/promotions/*").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/promotions/validate").authenticated()
+                        .requestMatchers("/promotions/**").hasAnyAuthority("ADMIN", "STAFF")
                         .requestMatchers("/api/cart/**").permitAll()
                         .requestMatchers("/api/orders/**").permitAll()
                         .requestMatchers("/ws/**").permitAll()
