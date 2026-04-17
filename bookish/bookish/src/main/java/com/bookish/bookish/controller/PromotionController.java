@@ -2,10 +2,12 @@ package com.bookish.bookish.controller;
 
 import com.bookish.bookish.dto.request.PromotionRequest;
 import com.bookish.bookish.dto.request.PromotionValidateRequest;
+import com.bookish.bookish.dto.response.PageResponse;
 import com.bookish.bookish.dto.response.PromotionApplyResponse;
 import com.bookish.bookish.dto.response.PromotionResponse;
 import com.bookish.bookish.service.PromotionService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -53,5 +55,17 @@ public class PromotionController {
             @RequestAttribute(value = "userId", required = false) Integer userId,
             @RequestBody PromotionValidateRequest request) {
         return service.validate(userId, request);
+    }
+
+    @GetMapping("/page")
+    public ResponseEntity<PageResponse<PromotionResponse>> getPromotionsPaged(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String keyword) {
+        return ResponseEntity.ok(service.getPromotionsPaged(keyword, page, size));
+    }
+    @GetMapping("/all")
+    public ResponseEntity<List<PromotionResponse>> getAllForAdmin() {
+        return ResponseEntity.ok(service.getAllForAdmin());
     }
 }

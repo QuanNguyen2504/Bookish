@@ -3,6 +3,7 @@ package com.bookish.bookish.controller;
 import com.bookish.bookish.dto.request.BulkConfirmRequest;
 import com.bookish.bookish.dto.response.BulkConfirmResponse;
 import com.bookish.bookish.dto.response.OrderResponse;
+import com.bookish.bookish.dto.response.PageResponse;
 import com.bookish.bookish.service.AdminOrderService;
 import com.bookish.bookish.service.OrderService;
 import lombok.RequiredArgsConstructor;
@@ -51,5 +52,13 @@ public class AdminOrderController {
             @RequestBody(required = false) BulkConfirmRequest req) {
         List<Integer> ids = (req == null) ? null : req.getOrderIds();
         return ResponseEntity.ok(orderService.bulkShip(ids));
+    }
+
+    @GetMapping("/page")
+    public ResponseEntity<PageResponse<OrderResponse>> getOrdersPaged(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String status) {
+        return ResponseEntity.ok(orderService.getOrdersPaged(status, page, size));
     }
 }

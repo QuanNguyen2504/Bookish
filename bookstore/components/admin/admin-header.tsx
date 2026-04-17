@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useRouter } from 'next/navigation';
-import { OrderNotificationBell } from '@/components/admin/order-notification-bell';
+import { NotificationBell } from '@/components/notification-bell';
 
 interface AdminHeaderProps {
   onMenuClick?: () => void;
@@ -30,46 +30,59 @@ export function AdminHeader({ onMenuClick }: AdminHeaderProps) {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center gap-4 px-6"
-      style={{ background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', borderBottom: '1px solid #d2d2d7' }}
+    <header
+      className="fixed top-0 right-0 z-30 flex h-14 items-center px-5 left-0 lg:left-64"
+      style={{
+        background: 'rgba(255,255,255,0.97)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderBottom: '1px solid #e5e7eb',
+      }}
     >
       {/* Mobile menu button */}
       <Button
         variant="ghost"
         size="icon"
-        className="lg:hidden"
+        className="lg:hidden shrink-0 mr-2"
         onClick={onMenuClick}
       >
         <Menu className="h-5 w-5" />
       </Button>
 
       {/* Search */}
-      <div className="relative flex-1 max-w-md">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <div className="relative w-64 shrink-0">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
         <Input
           type="search"
           placeholder="Tìm kiếm..."
-          className="pl-10 bg-muted/50 border-0"
+          className="pl-9 h-9 bg-gray-50 border-gray-200 text-sm focus-visible:ring-1 focus-visible:bg-white"
         />
       </div>
 
-      <div className="flex items-center gap-4">
-        {/* Notifications — realtime WebSocket */}
-        <OrderNotificationBell />
+      {/* Right section — đẩy về phía phải */}
+      <div className="flex items-center gap-2 ml-auto">
+        {/* Notifications */}
+        <NotificationBell theme="light" />
+
+        {/* Separator */}
+        <div className="w-px h-5 bg-gray-200 mx-1" />
 
         {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="flex items-center gap-2 px-2">
-              <Avatar className="h-8 w-8">
+            <Button
+              variant="ghost"
+              className="flex items-center gap-2.5 px-2.5 h-9 hover:bg-gray-100 rounded-lg"
+            >
+              <Avatar className="h-7 w-7">
                 <AvatarImage src={user?.avatarUrl ?? undefined} alt={user?.username} />
-                <AvatarFallback className="bg-primary text-primary-foreground">
+                <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
                   {user?.username?.charAt(0).toUpperCase() || 'A'}
                 </AvatarFallback>
               </Avatar>
-              <div className="hidden flex-col items-start md:flex">
-                <span className="text-sm font-medium">{user?.username || 'Admin'}</span>
-                <span className="text-xs text-muted-foreground">Quản trị viên</span>
+              <div className="hidden flex-col items-start md:flex leading-tight">
+                <span className="text-sm font-semibold text-gray-800">{user?.username || 'Admin'}</span>
+                <span className="text-[11px] text-gray-400">Quản trị viên</span>
               </div>
             </Button>
           </DropdownMenuTrigger>

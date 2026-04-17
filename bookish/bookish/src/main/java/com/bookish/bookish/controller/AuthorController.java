@@ -2,6 +2,7 @@ package com.bookish.bookish.controller;
 
 import com.bookish.bookish.dto.request.AuthorRequest;
 import com.bookish.bookish.dto.response.AuthorResponse;
+import com.bookish.bookish.dto.response.PageResponse;
 import com.bookish.bookish.service.AuthorService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -40,5 +41,13 @@ public class AuthorController {
     public ResponseEntity<Void> deleteAuthor(@PathVariable Integer id) {
         authorService.deleteAuthor(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/page")
+    public ResponseEntity<PageResponse<AuthorResponse>> getAuthorsPaged(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String keyword) {
+        return ResponseEntity.ok(authorService.getAuthorsPaged(keyword, page, size));
     }
 }

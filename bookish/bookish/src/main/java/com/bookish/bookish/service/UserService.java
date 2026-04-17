@@ -3,6 +3,7 @@ package com.bookish.bookish.service;
 import com.bookish.bookish.dto.request.ChangePasswordRequest;
 import com.bookish.bookish.dto.request.CreateStaffRequest;
 import com.bookish.bookish.dto.response.CustomerResponse;
+import com.bookish.bookish.dto.response.PageResponse;
 import com.bookish.bookish.entity.Cart;
 import com.bookish.bookish.entity.Role;
 import com.bookish.bookish.entity.User;
@@ -12,6 +13,10 @@ import com.bookish.bookish.mapper.UserMapper;
 import com.bookish.bookish.repository.CartItemRepository;
 import com.bookish.bookish.repository.CartRepository;
 import com.bookish.bookish.repository.UserRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -108,5 +113,14 @@ public class UserService {
         }
         user.setPassword(passwordEncoder.encode(req.getNewPassword()));
         userRepository.save(user);
+    }
+
+    public PageResponse<CustomerResponse> getUsersPaged(String keyword, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<User> userPage = userRepository.findAllPaged(keyword, pageable);
+        List<CustomerResponse> content = userPage.getContent().stream()
+                .map(UserMapper::toCustomerResponse) // dùng mapper hiện có
+                .toList();
+        return PageResponse.from(userPage, content);
     }
 }

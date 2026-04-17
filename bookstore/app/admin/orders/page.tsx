@@ -29,6 +29,10 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import {
+  Pagination, PaginationContent, PaginationEllipsis,
+  PaginationItem, PaginationLink, PaginationNext, PaginationPrevious,
+} from '@/components/ui/pagination';
 
 const fmt = (v: number) =>
   new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(v);
@@ -65,6 +69,49 @@ const NEXT_LABEL: Record<string, string> = {
 };
 
 const POLL_INTERVAL = 30000;
+const PAGE_SIZE = 10;
+
+function getPageNumbers(current: number, total: number): (number | '...')[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const pages: (number | '...')[] = [1];
+  if (current > 3) pages.push('...');
+  for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) pages.push(i);
+  if (current < total - 2) pages.push('...');
+  pages.push(total);
+  return pages;
+}
+
+function PaginationBar({ currentPage, totalPages, onPageChange }: {
+  currentPage: number; totalPages: number; onPageChange: (p: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+  return (
+    <Pagination className="mt-4">
+      <PaginationContent>
+        <PaginationItem>
+          <PaginationPrevious href="#"
+            onClick={(e) => { e.preventDefault(); if (currentPage > 1) onPageChange(currentPage - 1); }}
+            className={currentPage === 1 ? 'pointer-events-none opacity-40' : ''} />
+        </PaginationItem>
+        {getPageNumbers(currentPage, totalPages).map((page, i) => (
+          <PaginationItem key={i}>
+            {page === '...' ? <PaginationEllipsis /> : (
+              <PaginationLink href="#" isActive={page === currentPage}
+                onClick={(e) => { e.preventDefault(); onPageChange(page as number); }}>
+                {page}
+              </PaginationLink>
+            )}
+          </PaginationItem>
+        ))}
+        <PaginationItem>
+          <PaginationNext href="#"
+            onClick={(e) => { e.preventDefault(); if (currentPage < totalPages) onPageChange(currentPage + 1); }}
+            className={currentPage === totalPages ? 'pointer-events-none opacity-40' : ''} />
+        </PaginationItem>
+      </PaginationContent>
+    </Pagination>
+  );
+}
 
 function StatCard({ label, count, className }: { label: string; count: number; className: string }) {
   return (
@@ -136,6 +183,7 @@ export default function AdminOrdersPage() {
   const [shipAllDialogOpen, setShipAllDialogOpen] = useState(false);
   // Mode chọn: 'confirm' = chọn đơn PENDING CASH, 'ship' = chọn đơn PROCESSING
   const [bulkMode, setBulkMode] = useState<'confirm' | 'ship'>('confirm');
+  const [currentPage, setCurrentPage] = useState(1);
 
   useOrderNotification({
     onNewOrder: () => fetchOrders(true),
@@ -293,6 +341,10 @@ export default function AdminOrdersPage() {
     return matchSearch && matchStatus;
   }), [orders, searchTerm, statusFilter]);
 
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, statusFilter]);
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginatedOrders = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
   // 🔥 Đơn nào có thể chọn checkbox: tùy theo mode đang chọn
   const canSelectOrder = (o: OrderResponse): boolean => {
     if (selectedIds.length === 0) {
@@ -437,6 +489,11 @@ export default function AdminOrdersPage() {
           <CardTitle className="flex items-center gap-2">
             <ShoppingCart className="h-5 w-5" />
             Danh sách đơn hàng ({filtered.length})
+            {totalPages > 1 && (
+              <span className="text-sm font-normal text-muted-foreground">
+                — Trang {currentPage}/{totalPages}
+              </span>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -466,7 +523,7 @@ export default function AdminOrdersPage() {
                         Không có đơn hàng nào
                       </TableCell>
                     </TableRow>
-                  ) : filtered.map((order) => {
+                  ) : paginatedOrders.map((order) => {
                     const cfg = STATUS_CONFIG[order.status] ?? { label: order.status, className: 'bg-gray-100 text-gray-700' };
                     const nextStatus = NEXT_STATUS[order.status];
                     const canSelect = canSelectOrder(order);
@@ -547,6 +604,7 @@ export default function AdminOrdersPage() {
               </Table>
             </div>
           )}
+          <PaginationBar currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
         </CardContent>
       </Card>
 

@@ -2,18 +2,18 @@ package com.bookish.bookish.service;
 
 import com.bookish.bookish.dto.request.CheckoutRequest;
 import com.bookish.bookish.dto.request.UpdateOrderRequest;
-import com.bookish.bookish.dto.response.AppliedPromotionResponse;
-import com.bookish.bookish.dto.response.BulkConfirmResponse;
-import com.bookish.bookish.dto.response.OrderItemResponse;
-import com.bookish.bookish.dto.response.OrderResponse;
+import com.bookish.bookish.dto.response.*;
 import com.bookish.bookish.entity.*;
 import com.bookish.bookish.repository.*;
 import com.bookish.bookish.exception.AppException;
 import com.bookish.bookish.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -32,6 +32,7 @@ public class OrderService {
     private final BookRepository bookRepository;
     private final OrderNotificationService orderNotificationService;
     private final PromotionService promotionService;
+    private final NotificationService notificationService;
 
     private static final int QR_EXPIRY_MINUTES = 4;
     private static final BigDecimal SHIPPING_FEE = BigDecimal.valueOf(50000);
@@ -130,6 +131,17 @@ public class OrderService {
         orderItemRepository.saveAll(orderItems);
         orderNotificationService.notifyNewOrder(order, orderItems);
 
+        // 🔔 Thông báo cho admin có đơn mới (lưu DB - không mất khi offline)
+        try {
+            notificationService.notifyAllAdmins(
+                    "NEW_ORDER",
+                    "Đơn hàng mới #" + order.getOrderId(),
+                    "Khách " + user.getUsername() + " vừa đặt đơn "
+                            + String.format("%,.0f", order.getTotalPrice()) + "đ",
+                    "/admin/orders"
+            );
+        } catch (Exception ignored) {}
+
         if (!"QR_CODE".equals(order.getPaymentMethod())) {
             cartItemRepository.deleteAll(selectedItems);
         }
@@ -204,6 +216,18 @@ public class OrderService {
 
         order.setStatus("CANCELLED");
         orderRepository.save(order);
+
+        // 🔔 Thông báo cho user rằng đơn của họ đã bị admin hủy
+        try {
+            notificationService.createNotification(
+                    order.getUser(),
+                    "ORDER_CANCELLED_BY_ADMIN",
+                    "Đơn hàng #" + order.getOrderId() + " đã bị hủy",
+                    "Rất tiếc, đơn hàng của bạn đã bị hủy bởi cửa hàng. Vui lòng liên hệ để biết thêm chi tiết.",
+                    "/orders/" + order.getOrderId()
+            );
+        } catch (Exception ignored) {}
+
         return toResponse(order, orderItemRepository.findByOrder(order));
     }
 
@@ -244,6 +268,18 @@ public class OrderService {
 
         order.setStatus("SHIPPING");
         orderRepository.save(order);
+
+        // 🔔 Thông báo cho user: đơn đang được giao
+        try {
+            notificationService.createNotification(
+                    order.getUser(),
+                    "ORDER_SHIPPING",
+                    "Đơn hàng #" + order.getOrderId() + " đang được giao",
+                    "Đơn hàng của bạn đã được đơn vị vận chuyển nhận và đang trên đường giao tới.",
+                    "/orders/" + order.getOrderId()
+            );
+        } catch (Exception ignored) {}
+
         return toResponse(order, orderItemRepository.findByOrder(order));
     }
 
@@ -347,6 +383,17 @@ public class OrderService {
         try {
             orderNotificationService.notifyOrderStatusChanged(order, oldStatus, "PROCESSING");
         } catch (Exception ignored) {}
+
+        // 🔔 Thông báo cho user: đơn đã được xác nhận
+        try {
+            notificationService.createNotification(
+                    order.getUser(),
+                    "ORDER_CONFIRMED",
+                    "Đơn hàng #" + order.getOrderId() + " đã được xác nhận",
+                    "Cửa hàng đã xác nhận đơn hàng của bạn và đang chuẩn bị hàng để giao.",
+                    "/orders/" + order.getOrderId()
+            );
+        } catch (Exception ignored) {}
     }
 
     // ============================================================
@@ -409,6 +456,17 @@ public class OrderService {
         try {
             orderNotificationService.notifyOrderStatusChanged(order, oldStatus, "SHIPPING");
         } catch (Exception ignored) {}
+
+        // 🔔 Thông báo cho user: đang giao
+        try {
+            notificationService.createNotification(
+                    order.getUser(),
+                    "ORDER_SHIPPING",
+                    "Đơn hàng #" + order.getOrderId() + " đang được giao",
+                    "Đơn hàng của bạn đã được giao cho đơn vị vận chuyển.",
+                    "/orders/" + order.getOrderId()
+            );
+        } catch (Exception ignored) {}
     }
 
     // ============================================================
@@ -470,5 +528,21 @@ public class OrderService {
                 .items(itemResponses)
                 .promotions(promos)
                 .build();
+    }
+
+
+
+    public PageResponse<OrderResponse> getOrdersPaged(String status, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Order> orderPage;
+        if (status != null && !status.isBlank()) {
+            orderPage = orderRepository.findByStatusOrderByCreatedAtDesc(status, pageable);
+        } else {
+            orderPage = orderRepository.findAllPaged(pageable);
+        }
+        List<OrderResponse> content = orderPage.getContent().stream()
+                .map(o -> toResponse(o, orderItemRepository.findByOrder(o)))
+                .toList();
+        return PageResponse.from(orderPage, content);
     }
 }

@@ -2,6 +2,7 @@ package com.bookish.bookish.service;
 
 import com.bookish.bookish.dto.request.PromotionRequest;
 import com.bookish.bookish.dto.request.PromotionValidateRequest;
+import com.bookish.bookish.dto.response.PageResponse;
 import com.bookish.bookish.dto.response.PromotionApplyResponse;
 import com.bookish.bookish.dto.response.PromotionResponse;
 import com.bookish.bookish.entity.DiscountType;
@@ -13,6 +14,10 @@ import com.bookish.bookish.mapper.PromotionMapper;
 import com.bookish.bookish.repository.PromotionRepository;
 import com.bookish.bookish.repository.PromotionUsageRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -211,6 +216,12 @@ public class PromotionService {
         }
     }
 
+    public List<PromotionResponse> getAllForAdmin() {
+        return repository.findAll().stream()
+                .map(mapper::toResponse)
+                .toList();
+    }
+
     public BigDecimal calculateDiscount(Promotion promotion,
                                         BigDecimal totalAmount,
                                         BigDecimal shippingFee) {
@@ -238,4 +249,15 @@ public class PromotionService {
         }
         return discount;
     }
+
+    public PageResponse<PromotionResponse> getPromotionsPaged(String keyword, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "startDate"));
+        Page<Promotion> promoPage = repository.findAllPaged(keyword, pageable);
+        List<PromotionResponse> content = promoPage.getContent().stream()
+                .map(mapper::toResponse)
+                .toList();
+        return PageResponse.from(promoPage, content);
+    }
+
+
 }

@@ -7,14 +7,25 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft, MapPin, Phone, Package, Loader2,
-  Pencil, X, Check, Banknote, QrCode, RefreshCw, CheckCircle2, Star
+  Pencil, X, Check, Banknote, QrCode, RefreshCw, CheckCircle2, Star,
+  RotateCcw, Upload, AlertCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from '@/components/ui/dialog';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { orderApi, OrderResponse } from '@/lib/api/order-api';
 import { reviewApi } from '@/lib/api/review-api';
+import {
+  returnApi, ReturnRequestResponse, ReturnReason,
+  REASON_LABELS, STATUS_LABELS,
+} from '@/lib/api/return-api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -53,6 +64,18 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   }>>({});
   const [reviewedBooks, setReviewedBooks] = useState<Set<number>>(new Set());
 
+  // ===== Return state =====
+  const [existingReturn, setExistingReturn] = useState<ReturnRequestResponse | null>(null);
+  const [returnDialogOpen, setReturnDialogOpen] = useState(false);
+  const [bankDialogOpen, setBankDialogOpen] = useState(false);
+  const [returnForm, setReturnForm] = useState<{
+    reason: ReturnReason; description: string; imageUrl: string;
+  }>({ reason: 'BROKEN', description: '', imageUrl: '' });
+  const [bankForm, setBankForm] = useState({ bankAccount: '', bankName: '', accountHolder: '' });
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [submittingReturn, setSubmittingReturn] = useState(false);
+  const [submittingBank, setSubmittingBank] = useState(false);
+
   const fetchOrder = useCallback(async (silent = false) => {
     if (!token || !id) return;
     if (!silent) setLoading(true);
@@ -85,6 +108,27 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     const interval = setInterval(() => fetchOrder(true), POLL_INTERVAL);
     return () => clearInterval(interval);
   }, [fetchOrder]);
+
+  // Lấy thông tin return của đơn này (nếu có)
+  const fetchReturn = useCallback(async () => {
+    if (!token || !order) return;
+    try {
+      const all = await returnApi.getMyRequests(token);
+      const found = all.find(r => r.orderId === order.orderId);
+      setExistingReturn(found || null);
+      if (found) {
+        setBankForm({
+          bankAccount: found.bankAccount || '',
+          bankName: found.bankName || '',
+          accountHolder: found.accountHolder || '',
+        });
+      }
+    } catch { /* ignore */ }
+  }, [token, order]);
+
+  useEffect(() => {
+    if (order?.status === 'DELIVERED') fetchReturn();
+  }, [order?.status, fetchReturn]);
 
   const handleCancel = async () => {
     if (!token || !order) return;
@@ -135,6 +179,83 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     finally { setSaving(false); }
   };
 
+  // ===== Return handlers =====
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+
+  const handleUploadImage = async (file: File) => {
+    if (!token) return;
+    setUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${API_BASE}/upload/image`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Upload thất bại');
+      setReturnForm(prev => ({ ...prev, imageUrl: data.url }));
+      toast.success('Đã tải ảnh lên');
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handleSubmitReturn = async () => {
+    if (!token || !order) return;
+    setSubmittingReturn(true);
+    try {
+      const created = await returnApi.create({
+        orderId: order.orderId,
+        reason: returnForm.reason,
+        description: returnForm.description || undefined,
+        imageUrl: returnForm.imageUrl || undefined,
+      }, token);
+      setExistingReturn(created);
+      setReturnDialogOpen(false);
+      setReturnForm({ reason: 'BROKEN', description: '', imageUrl: '' });
+      toast.success('Đã gửi yêu cầu hoàn trả. Chờ admin duyệt.');
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSubmittingReturn(false);
+    }
+  };
+
+  const handleSubmitBankInfo = async () => {
+    if (!token || !existingReturn) return;
+    if (!bankForm.bankAccount.trim() || !bankForm.bankName.trim() || !bankForm.accountHolder.trim()) {
+      toast.error('Vui lòng điền đầy đủ thông tin');
+      return;
+    }
+    setSubmittingBank(true);
+    try {
+      const updated = await returnApi.updateBankInfo(existingReturn.returnId, bankForm, token);
+      setExistingReturn(updated);
+      setBankDialogOpen(false);
+      toast.success('Đã lưu thông tin ngân hàng');
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSubmittingBank(false);
+    }
+  };
+
+  const handleCancelReturn = async () => {
+    if (!token || !existingReturn) return;
+    if (!confirm('Bạn có chắc muốn hủy yêu cầu hoàn trả này?')) return;
+    try {
+      const updated = await returnApi.cancel(existingReturn.returnId, token);
+      setExistingReturn(updated);
+      toast.success('Đã hủy yêu cầu hoàn trả');
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
+
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
       <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -147,6 +268,13 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const isShipping = order.status === 'SHIPPING';
   const isDelivered = order.status === 'DELIVERED';
   const isCancelled = order.status === 'CANCELLED';
+
+  // Tính còn trong thời hạn 7 ngày hoàn trả không
+  const daysSinceDelivered = Math.floor(
+    (Date.now() - new Date(order.createdAt).getTime()) / (1000 * 60 * 60 * 24)
+  );
+  const canRequestReturn = isDelivered && daysSinceDelivered <= 7 && !existingReturn;
+  const daysLeft = Math.max(0, 7 - daysSinceDelivered);
 
   // Helpers cho review
   const getReviewState = (bookId: number) => reviewStates[bookId] ?? {
@@ -277,6 +405,112 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                   <p className="text-xs text-green-600 mt-0.5">Cảm ơn bạn đã mua hàng tại Bookish!</p>
                 </div>
               </div>
+            </motion.div>
+          )}
+
+          {/* Yêu cầu hoàn trả — chỉ hiện khi DELIVERED */}
+          {isDelivered && (
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.03 }}>
+              {existingReturn ? (
+                // Đã có yêu cầu hoàn trả
+                <div className="bg-card rounded-2xl border border-border p-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <RotateCcw className="h-4 w-4 text-primary" />
+                      <h3 className="font-semibold text-sm">Yêu cầu hoàn trả #{String(existingReturn.returnId).padStart(4, '0')}</h3>
+                    </div>
+                    <span className={cn('text-xs font-medium px-2.5 py-1 rounded-full',
+                      existingReturn.status === 'REQUESTED' && 'bg-amber-100 text-amber-700',
+                      existingReturn.status === 'APPROVED' && 'bg-blue-100 text-blue-700',
+                      existingReturn.status === 'REJECTED' && 'bg-red-100 text-red-700',
+                      existingReturn.status === 'RETURNED' && 'bg-purple-100 text-purple-700',
+                      existingReturn.status === 'REFUNDED' && 'bg-emerald-100 text-emerald-700',
+                      existingReturn.status === 'CANCELLED_BY_USER' && 'bg-gray-100 text-gray-700',
+                    )}>
+                      {STATUS_LABELS[existingReturn.status]}
+                    </span>
+                  </div>
+
+                  <div className="text-sm space-y-1">
+                    <p><span className="text-muted-foreground">Lý do:</span> {REASON_LABELS[existingReturn.reason]}</p>
+                    {existingReturn.description && (
+                      <p className="text-muted-foreground text-xs">{existingReturn.description}</p>
+                    )}
+                    <p><span className="text-muted-foreground">Số tiền hoàn:</span>{' '}
+                      <span className="font-semibold text-primary">
+                        {existingReturn.refundAmount.toLocaleString('vi-VN')}đ
+                      </span>
+                    </p>
+                  </div>
+
+                  {existingReturn.adminNote && (
+                    <div className="bg-muted/50 rounded-lg p-3 text-sm">
+                      <p className="text-xs text-muted-foreground mb-1">Ghi chú từ admin:</p>
+                      <p>{existingReturn.adminNote}</p>
+                    </div>
+                  )}
+
+                  {/* Nhắc user nhập STK khi đã APPROVED hoặc RETURNED */}
+                  {(existingReturn.status === 'APPROVED' || existingReturn.status === 'RETURNED') && (
+                    <>
+                      {existingReturn.bankAccount ? (
+                        <div className="bg-muted/50 rounded-lg p-3 text-sm space-y-1">
+                          <p className="text-xs text-muted-foreground">Thông tin nhận hoàn tiền</p>
+                          <p>{existingReturn.bankName} · {existingReturn.bankAccount}</p>
+                          <p className="text-xs">{existingReturn.accountHolder}</p>
+                          <button onClick={() => setBankDialogOpen(true)}
+                            className="text-xs text-primary hover:underline mt-1">
+                            Chỉnh sửa
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
+                          <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                          <div className="flex-1">
+                            <p className="text-sm text-amber-800 font-medium">Cần cung cấp thông tin ngân hàng</p>
+                            <p className="text-xs text-amber-700 mt-0.5">
+                              Vui lòng nhập STK để nhận tiền hoàn
+                            </p>
+                          </div>
+                          <Button size="sm" onClick={() => setBankDialogOpen(true)}
+                            className="bg-amber-600 hover:bg-amber-700 text-white">
+                            Nhập STK
+                          </Button>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* Nút hủy khi còn REQUESTED */}
+                  {existingReturn.status === 'REQUESTED' && (
+                    <Button variant="outline" size="sm"
+                      className="w-full border-destructive text-destructive hover:bg-destructive hover:text-white"
+                      onClick={handleCancelReturn}>
+                      Hủy yêu cầu
+                    </Button>
+                  )}
+                </div>
+              ) : canRequestReturn ? (
+                // Chưa có yêu cầu, còn trong 7 ngày
+                <div className="bg-card rounded-2xl border border-border p-5 flex items-center justify-between gap-4">
+                  <div>
+                    <h3 className="font-semibold text-sm mb-0.5">Gặp vấn đề với đơn hàng?</h3>
+                    <p className="text-xs text-muted-foreground">
+                      Bạn còn {daysLeft} ngày để yêu cầu hoàn trả
+                    </p>
+                  </div>
+                  <Button variant="outline" className="gap-2 flex-shrink-0 rounded-full"
+                    onClick={() => setReturnDialogOpen(true)}>
+                    <RotateCcw className="h-4 w-4" />
+                    Yêu cầu hoàn trả
+                  </Button>
+                </div>
+              ) : daysSinceDelivered > 7 ? (
+                // Quá 7 ngày
+                <div className="text-xs text-muted-foreground text-center py-2">
+                  Đã quá 7 ngày — không thể yêu cầu hoàn trả
+                </div>
+              ) : null}
             </motion.div>
           )}
 
@@ -495,6 +729,127 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           )}
         </div>
       </div>
+
+      {/* Dialog: Form tạo yêu cầu hoàn trả */}
+      <Dialog open={returnDialogOpen} onOpenChange={setReturnDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Yêu cầu hoàn trả</DialogTitle>
+            <DialogDescription>
+              Vui lòng cung cấp thông tin để chúng tôi xử lý yêu cầu
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Lý do hoàn trả</label>
+              <Select value={returnForm.reason}
+                onValueChange={(v) => setReturnForm(prev => ({ ...prev, reason: v as ReturnReason }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(REASON_LABELS).map(([key, label]) => (
+                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {returnForm.reason === 'CHANGE_MIND' && (
+                <p className="text-xs text-amber-700 mt-1.5">
+                  Lưu ý: lý do "đổi ý" sẽ bị trừ phí vận chuyển
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Mô tả chi tiết (không bắt buộc)</label>
+              <textarea value={returnForm.description}
+                onChange={(e) => setReturnForm(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="Mô tả vấn đề bạn gặp phải..."
+                rows={3}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary" />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Ảnh minh chứng (không bắt buộc)</label>
+              {returnForm.imageUrl ? (
+                <div className="relative">
+                  <Image src={returnForm.imageUrl} alt="Ảnh"
+                    width={400} height={200}
+                    className="w-full h-40 object-contain rounded-lg border border-border" />
+                  <button onClick={() => setReturnForm(prev => ({ ...prev, imageUrl: '' }))}
+                    className="absolute top-2 right-2 bg-white rounded-full p-1 shadow-md hover:bg-red-50">
+                    <X className="h-4 w-4 text-red-500" />
+                  </button>
+                </div>
+              ) : (
+                <label className="flex items-center justify-center gap-2 w-full py-6 border-2 border-dashed border-border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
+                  {uploadingImage ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /><span className="text-sm text-muted-foreground">Đang tải lên...</span></>
+                  ) : (
+                    <><Upload className="h-4 w-4 text-muted-foreground" /><span className="text-sm text-muted-foreground">Chọn ảnh</span></>
+                  )}
+                  <input type="file" accept="image/*" className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleUploadImage(file);
+                    }}
+                    disabled={uploadingImage} />
+                </label>
+              )}
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" className="flex-1" onClick={() => setReturnDialogOpen(false)}>
+                Hủy
+              </Button>
+              <Button className="flex-1" onClick={handleSubmitReturn} disabled={submittingReturn}>
+                {submittingReturn ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Đang gửi...</> : 'Gửi yêu cầu'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Nhập thông tin ngân hàng */}
+      <Dialog open={bankDialogOpen} onOpenChange={setBankDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Thông tin ngân hàng</DialogTitle>
+            <DialogDescription>
+              Cung cấp STK để nhận tiền hoàn
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Tên ngân hàng</label>
+              <Input value={bankForm.bankName}
+                onChange={(e) => setBankForm(prev => ({ ...prev, bankName: e.target.value }))}
+                placeholder="VD: Vietcombank, Techcombank..." />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Số tài khoản</label>
+              <Input value={bankForm.bankAccount}
+                onChange={(e) => setBankForm(prev => ({ ...prev, bankAccount: e.target.value }))}
+                placeholder="Nhập số tài khoản" />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Tên chủ tài khoản</label>
+              <Input value={bankForm.accountHolder}
+                onChange={(e) => setBankForm(prev => ({ ...prev, accountHolder: e.target.value }))}
+                placeholder="Họ và tên chủ tài khoản" />
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" className="flex-1" onClick={() => setBankDialogOpen(false)}>
+                Hủy
+              </Button>
+              <Button className="flex-1" onClick={handleSubmitBankInfo} disabled={submittingBank}>
+                {submittingBank ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Đang lưu...</> : 'Lưu'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

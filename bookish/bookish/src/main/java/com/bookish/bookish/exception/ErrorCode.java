@@ -12,7 +12,6 @@ public enum ErrorCode {
     INVALID_KEY(400, "Khóa không hợp lệ", HttpStatus.BAD_REQUEST),
 
     // AUTH
-    // AUTH
     UNAUTHENTICATED(401, "Chưa xác thực", HttpStatus.UNAUTHORIZED),
     INVALID_PASSWORD(401, "Sai mật khẩu", HttpStatus.UNAUTHORIZED),
     UNAUTHORIZED(403, "Không có quyền truy cập", HttpStatus.FORBIDDEN),
@@ -52,7 +51,7 @@ public enum ErrorCode {
     WISHLIST_ITEM_EXISTED(409, "Sách này đã có trong danh sách yêu thích", HttpStatus.CONFLICT),
     WISHLIST_ITEM_NOT_FOUND(404, "Không tìm thấy sách trong danh sách yêu thích", HttpStatus.NOT_FOUND),
 
-
+    // PROMOTION
     PROMOTION_NOT_FOUND(404, "Không tìm thấy khuyến mãi", HttpStatus.NOT_FOUND),
     PROMOTION_CODE_EXISTED(409, "Mã khuyến mãi đã tồn tại", HttpStatus.CONFLICT),
     INVALID_PROMOTION_TIME(400, "Thời gian khuyến mãi không hợp lệ", HttpStatus.BAD_REQUEST),
@@ -92,8 +91,20 @@ public enum ErrorCode {
 
     // PASSWORD
     PASSWORD_CONFIRM_MISMATCH(400, "Mật khẩu xác nhận không khớp", HttpStatus.BAD_REQUEST),
-    PASSWORD_INCORRECT(400, "Mật khẩu hiện tại không đúng", HttpStatus.BAD_REQUEST);
+    PASSWORD_INCORRECT(400, "Mật khẩu hiện tại không đúng", HttpStatus.BAD_REQUEST),
 
+    // NOTIFICATION
+    NOTIFICATION_NOT_FOUND(404, "Không tìm thấy thông báo", HttpStatus.NOT_FOUND),
+    NOTIFICATION_ACCESS_DENIED(403, "Bạn không có quyền truy cập thông báo này", HttpStatus.FORBIDDEN),
+
+    // RETURN
+    RETURN_NOT_FOUND(404, "Không tìm thấy yêu cầu hoàn trả", HttpStatus.NOT_FOUND),
+    RETURN_ORDER_NOT_DELIVERED(400, "Chỉ có thể hoàn trả đơn đã giao thành công", HttpStatus.BAD_REQUEST),
+    RETURN_WINDOW_EXPIRED(400, "Đã quá 7 ngày kể từ khi nhận hàng, không thể yêu cầu hoàn trả", HttpStatus.BAD_REQUEST),
+    RETURN_ALREADY_EXISTS(409, "Đơn hàng này đã có yêu cầu hoàn trả", HttpStatus.CONFLICT),
+    RETURN_INVALID_STATUS(400, "Không thể thực hiện thao tác ở trạng thái hiện tại", HttpStatus.BAD_REQUEST),
+    RETURN_ACCESS_DENIED(403, "Không có quyền truy cập yêu cầu hoàn trả này", HttpStatus.FORBIDDEN),
+    RETURN_BANK_INFO_REQUIRED(400, "Cần cung cấp đầy đủ thông tin ngân hàng", HttpStatus.BAD_REQUEST);
 
 
     private final int code;

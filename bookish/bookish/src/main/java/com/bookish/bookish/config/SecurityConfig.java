@@ -42,6 +42,7 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/promotions/*").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/promotions/validate").authenticated()
                         .requestMatchers("/promotions/**").hasAnyAuthority("ADMIN", "STAFF")
+                        .requestMatchers("/promotions/all").hasAnyAuthority("ADMIN", "STAFF")
                         .requestMatchers("/api/cart/**").permitAll()
                         .requestMatchers("/api/orders/**").permitAll()
                         .requestMatchers("/ws/**").permitAll()
@@ -56,6 +57,9 @@ public class SecurityConfig {
                         //  MỚI: WISHLIST — chỉ user đã đăng nhập
                         .requestMatchers("/api/wishlist/**").authenticated()
 
+                        // RETURN — user cần đăng nhập
+                        .requestMatchers("/api/returns/**").authenticated()
+
                         // Cho phép user đã login upload/xóa avatar
                         .requestMatchers("/users/*/avatar").authenticated()
 
@@ -69,6 +73,7 @@ public class SecurityConfig {
                         .requestMatchers("/books/**").hasAnyAuthority("ADMIN", "STAFF")
                         .requestMatchers("/customers/**").hasAnyAuthority("ADMIN", "STAFF")
                         .requestMatchers("/staff/**").hasAnyAuthority("ADMIN", "STAFF")
+                        .requestMatchers( "/books/admin/**").hasAnyAuthority("ADMIN", "STAFF")
 
                         .anyRequest().authenticated()
                 )

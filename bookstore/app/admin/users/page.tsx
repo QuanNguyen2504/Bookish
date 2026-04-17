@@ -20,8 +20,56 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Search, Eye, Trash2, Users, UserIcon, ShieldCheck, Loader2 } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
+import {
+  Pagination, PaginationContent, PaginationEllipsis,
+  PaginationItem, PaginationLink, PaginationNext, PaginationPrevious,
+} from '@/components/ui/pagination';
+
+const PAGE_SIZE = 10;
+
+function getPageNumbers(current: number, total: number): (number | '...')[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const pages: (number | '...')[] = [1];
+  if (current > 3) pages.push('...');
+  for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) pages.push(i);
+  if (current < total - 2) pages.push('...');
+  pages.push(total);
+  return pages;
+}
+
+function PaginationBar({ currentPage, totalPages, onPageChange }: {
+  currentPage: number; totalPages: number; onPageChange: (p: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+  return (
+    <Pagination className="mt-4">
+      <PaginationContent>
+        <PaginationItem>
+          <PaginationPrevious href="#"
+            onClick={(e) => { e.preventDefault(); if (currentPage > 1) onPageChange(currentPage - 1); }}
+            className={currentPage === 1 ? 'pointer-events-none opacity-40' : ''} />
+        </PaginationItem>
+        {getPageNumbers(currentPage, totalPages).map((page, i) => (
+          <PaginationItem key={i}>
+            {page === '...' ? <PaginationEllipsis /> : (
+              <PaginationLink href="#" isActive={page === currentPage}
+                onClick={(e) => { e.preventDefault(); onPageChange(page as number); }}>
+                {page}
+              </PaginationLink>
+            )}
+          </PaginationItem>
+        ))}
+        <PaginationItem>
+          <PaginationNext href="#"
+            onClick={(e) => { e.preventDefault(); if (currentPage < totalPages) onPageChange(currentPage + 1); }}
+            className={currentPage === totalPages ? 'pointer-events-none opacity-40' : ''} />
+        </PaginationItem>
+      </PaginationContent>
+    </Pagination>
+  );
+}
 
 const formatDate = (dateString: string) => {
   if (!dateString) return 'N/A';
@@ -40,6 +88,7 @@ export default function AdminUsersPage() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Lấy danh sách customers từ API
   const fetchCustomers = useCallback(async () => {
@@ -66,6 +115,10 @@ export default function AdminUsersPage() {
       user.phone?.includes(searchTerm)
     );
   }, [customers, searchTerm]);
+
+  useEffect(() => { setCurrentPage(1); }, [searchTerm]);
+  const totalPages = Math.ceil(filteredCustomers.length / PAGE_SIZE);
+  const paginatedCustomers = filteredCustomers.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const handleViewDetail = (user: CustomerResponse) => {
     setSelectedUser(user);
@@ -156,7 +209,14 @@ export default function AdminUsersPage() {
       {/* Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Danh sách người dùng ({filteredCustomers.length})</CardTitle>
+          <CardTitle>
+            Danh sách người dùng ({filteredCustomers.length})
+            {totalPages > 1 && (
+              <span className="ml-2 text-sm font-normal text-muted-foreground">
+                — Trang {currentPage}/{totalPages}
+              </span>
+            )}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -184,11 +244,12 @@ export default function AdminUsersPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredCustomers.map((user) => (
+                    paginatedCustomers.map((user) => (
                       <TableRow key={user.id}>
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <Avatar>
+                              <AvatarImage src={user.avatarUrl ?? undefined} alt={user.username} />
                               <AvatarFallback className="bg-primary/10 text-primary font-medium">
                                 {user.username.charAt(0).toUpperCase()}
                               </AvatarFallback>
@@ -248,6 +309,7 @@ export default function AdminUsersPage() {
               </Table>
             </div>
           )}
+          <PaginationBar currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
         </CardContent>
       </Card>
 
@@ -261,6 +323,7 @@ export default function AdminUsersPage() {
             <div className="space-y-4">
               <div className="flex items-center gap-4">
                 <Avatar className="h-16 w-16">
+                  <AvatarImage src={selectedUser.avatarUrl ?? undefined} alt={selectedUser.username} />
                   <AvatarFallback className="bg-primary/10 text-primary text-2xl font-bold">
                     {selectedUser.username.charAt(0).toUpperCase()}
                   </AvatarFallback>

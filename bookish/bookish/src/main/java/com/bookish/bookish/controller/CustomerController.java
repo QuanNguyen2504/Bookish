@@ -2,6 +2,7 @@ package com.bookish.bookish.controller;
 
 import com.bookish.bookish.dto.request.ChangePasswordRequest;
 import com.bookish.bookish.dto.response.CustomerResponse;
+import com.bookish.bookish.dto.response.PageResponse;
 import com.bookish.bookish.entity.User;
 import com.bookish.bookish.security.JwtUtil;
 import com.bookish.bookish.service.UserService;
@@ -61,5 +62,13 @@ public class CustomerController {
         }
         userService.changePassword(id, req);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/admin/page")
+    public ResponseEntity<PageResponse<CustomerResponse>> getUsersPaged(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String keyword) {
+        return ResponseEntity.ok(userService.getUsersPaged(keyword, page, size));
     }
 }

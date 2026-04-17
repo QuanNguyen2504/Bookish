@@ -67,7 +67,7 @@ export default function AdminLayout({
       )}
 
       {/* Main Content */}
-      <div className="lg:pl-64">
+      <div className="lg:pl-64 pt-14">
         <AdminHeader onMenuClick={() => setIsMobileMenuOpen(true)} />
         <main className="p-6">
           {children}

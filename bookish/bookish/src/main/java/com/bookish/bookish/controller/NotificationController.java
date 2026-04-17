@@ -1,0 +1,39 @@
+package com.bookish.bookish.controller;
+
+import com.bookish.bookish.dto.response.NotificationResponse;
+import com.bookish.bookish.service.NotificationService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/notifications")
+@RequiredArgsConstructor
+public class NotificationController {
+
+    private final NotificationService notificationService;
+
+    @GetMapping("/my")
+    public ResponseEntity<List<NotificationResponse>> getMyNotifications() {
+        return ResponseEntity.ok(notificationService.getMyNotifications());
+    }
+
+    @GetMapping("/unread-count")
+    public ResponseEntity<Map<String, Long>> getUnreadCount() {
+        return ResponseEntity.ok(notificationService.getUnreadCount());
+    }
+
+    @PatchMapping("/{id}/read")
+    public ResponseEntity<Void> markAsRead(@PathVariable Long id) {
+        notificationService.markAsRead(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/mark-all-read")
+    public ResponseEntity<Map<String, Integer>> markAllAsRead() {
+        return ResponseEntity.ok(notificationService.markAllAsRead());
+    }
+}

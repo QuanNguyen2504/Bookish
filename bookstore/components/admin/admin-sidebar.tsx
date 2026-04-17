@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   BookOpen, FolderTree,
   ShoppingCart, UserCircle, Ticket, BarChart3, LogOut, BookMarked,
+  RotateCcw,
 } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth-store';
 
@@ -14,6 +15,7 @@ const menuItems = [
   { title: 'Quản lý Danh mục',    href: '/admin/categories', icon: FolderTree },
   { title: 'Quản lý Tác giả',     href: '/admin/authors',    icon: BookMarked },
   { title: 'Quản lý Đơn hàng',    href: '/admin/orders',     icon: ShoppingCart },
+  { title: 'Yêu cầu hoàn trả',    href: '/admin/returns',    icon: RotateCcw },
   { title: 'Quản lý Người dùng',  href: '/admin/users',      icon: UserCircle },
   { title: 'Quản lý Khuyến mãi',  href: '/admin/promotions', icon: Ticket },
 ];

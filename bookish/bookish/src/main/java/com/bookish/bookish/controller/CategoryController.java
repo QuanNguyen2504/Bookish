@@ -3,6 +3,7 @@ package com.bookish.bookish.controller;
 import com.bookish.bookish.dto.request.CategoryRequest;
 import com.bookish.bookish.dto.response.ApiResponse;
 import com.bookish.bookish.dto.response.CategoryResponse;
+import com.bookish.bookish.dto.response.PageResponse;
 import com.bookish.bookish.service.CategoryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -65,6 +66,17 @@ public class CategoryController {
         return ApiResponse.<Void>builder()
                 .statusCode(200)
                 .message("Delete category successfully")
+                .build();
+    }
+
+    @GetMapping("/page")
+    public ApiResponse<PageResponse<CategoryResponse>> getCategoriesPaged(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String keyword) {
+        return ApiResponse.<PageResponse<CategoryResponse>>builder()
+                .statusCode(200).message("OK")
+                .data(categoryService.getCategoriesPaged(keyword, page, size))
                 .build();
     }
 }

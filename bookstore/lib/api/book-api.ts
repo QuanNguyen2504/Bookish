@@ -30,6 +30,25 @@ export interface BookRequest {
   categoryIds: number[];
 }
 
+// Khớp với PageResponse.java
+export interface PageData<T> {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
+}
+
+export interface BookPageParams {
+  page?: number;
+  size?: number;
+  keyword?: string;
+  categoryId?: number;
+  sort?: string;
+}
+
 async function request<T>(endpoint: string, options: RequestInit, token?: string): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
@@ -51,7 +70,17 @@ async function request<T>(endpoint: string, options: RequestInit, token?: string
   return data;
 }
 
+// Helper: build query string từ params, bỏ qua undefined/null
+function buildQuery(params: Record<string, unknown>): string {
+  const parts = Object.entries(params)
+    .filter(([, v]) => v !== undefined && v !== null && v !== '')
+    .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`);
+  return parts.length > 0 ? `?${parts.join('&')}` : '';
+}
+
 export const bookApi = {
+  // ===================== API CŨ (giữ nguyên) =====================
+
   // GET /books
   getAll: () =>
     request<BookResponse[]>('/books', { method: 'GET' }),
@@ -97,4 +126,21 @@ export const bookApi = {
   // DELETE /books/:id
   delete: (id: number, token: string) =>
     request<void>(`/books/${id}`, { method: 'DELETE' }, token),
+
+  // ===================== PHÂN TRANG MỚI =====================
+
+  // Dành cho user — chỉ sách chưa xóa
+  getActivePaged: (params: BookPageParams = {}) =>
+    request<PageData<BookResponse>>(
+      `/books/page${buildQuery(params as Record<string, unknown>)}`,
+      { method: 'GET' }
+    ),
+
+  // Dành cho admin — tất cả sách kể cả đã xóa
+  getAdminPaged: (params: BookPageParams = {}, token?: string) =>
+    request<PageData<BookResponse>>(
+      `/books/admin/page${buildQuery(params as Record<string, unknown>)}`,
+      { method: 'GET' },
+      token
+    ),
 };

@@ -2,11 +2,16 @@ package com.bookish.bookish.service;
 
 import com.bookish.bookish.dto.request.AuthorRequest;
 import com.bookish.bookish.dto.response.AuthorResponse;
+import com.bookish.bookish.dto.response.PageResponse;
 import com.bookish.bookish.entity.Author;
 import com.bookish.bookish.exception.AppException;
 import com.bookish.bookish.exception.ErrorCode;
 import com.bookish.bookish.mapper.AuthorMapper;
 import com.bookish.bookish.repository.AuthorRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -72,5 +77,14 @@ public class AuthorService {
         }
 
         authorRepository.delete(author);
+    }
+
+    public PageResponse<AuthorResponse> getAuthorsPaged(String keyword, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "name"));
+        Page<Author> authorPage = authorRepository.findAllPaged(keyword, pageable);
+        List<AuthorResponse> content = authorPage.getContent().stream()
+                .map(AuthorMapper::toAuthorResponse)
+                .toList();
+        return PageResponse.from(authorPage, content);
     }
 }

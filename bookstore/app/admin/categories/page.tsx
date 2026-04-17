@@ -22,6 +22,54 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Plus, Pencil, Trash2, FolderTree, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  Pagination, PaginationContent, PaginationEllipsis,
+  PaginationItem, PaginationLink, PaginationNext, PaginationPrevious,
+} from '@/components/ui/pagination';
+
+const PAGE_SIZE = 10;
+
+function getPageNumbers(current: number, total: number): (number | '...')[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const pages: (number | '...')[] = [1];
+  if (current > 3) pages.push('...');
+  for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) pages.push(i);
+  if (current < total - 2) pages.push('...');
+  pages.push(total);
+  return pages;
+}
+
+function PaginationBar({ currentPage, totalPages, onPageChange }: {
+  currentPage: number; totalPages: number; onPageChange: (p: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+  return (
+    <Pagination className="mt-4">
+      <PaginationContent>
+        <PaginationItem>
+          <PaginationPrevious href="#"
+            onClick={(e) => { e.preventDefault(); if (currentPage > 1) onPageChange(currentPage - 1); }}
+            className={currentPage === 1 ? 'pointer-events-none opacity-40' : ''} />
+        </PaginationItem>
+        {getPageNumbers(currentPage, totalPages).map((page, i) => (
+          <PaginationItem key={i}>
+            {page === '...' ? <PaginationEllipsis /> : (
+              <PaginationLink href="#" isActive={page === currentPage}
+                onClick={(e) => { e.preventDefault(); onPageChange(page as number); }}>
+                {page}
+              </PaginationLink>
+            )}
+          </PaginationItem>
+        ))}
+        <PaginationItem>
+          <PaginationNext href="#"
+            onClick={(e) => { e.preventDefault(); if (currentPage < totalPages) onPageChange(currentPage + 1); }}
+            className={currentPage === totalPages ? 'pointer-events-none opacity-40' : ''} />
+        </PaginationItem>
+      </PaginationContent>
+    </Pagination>
+  );
+}
 
 export default function AdminCategoriesPage() {
   const { token } = useAuthStore();
@@ -35,6 +83,7 @@ export default function AdminCategoriesPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<CategoryResponse | null>(null);
   const [name, setName] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Lấy danh sách danh mục
   const fetchCategories = useCallback(async () => {
@@ -52,6 +101,9 @@ export default function AdminCategoriesPage() {
   useEffect(() => {
     fetchCategories();
   }, [fetchCategories]);
+
+  const totalPages = Math.ceil(categories.length / PAGE_SIZE);
+  const paginatedCategories = categories.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const handleOpenDialog = (category?: CategoryResponse) => {
     if (category) {
@@ -122,6 +174,11 @@ export default function AdminCategoriesPage() {
           <CardTitle className="flex items-center gap-2">
             <FolderTree className="h-5 w-5" />
             Danh sách danh mục ({categories.length})
+            {totalPages > 1 && (
+              <span className="text-sm font-normal text-muted-foreground">
+                — Trang {currentPage}/{totalPages}
+              </span>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -146,7 +203,7 @@ export default function AdminCategoriesPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  categories.map((category) => (
+                  paginatedCategories.map((category) => (
                     <TableRow key={category.id}>
                       <TableCell className="text-muted-foreground">#{category.id}</TableCell>
                       <TableCell>
@@ -180,6 +237,7 @@ export default function AdminCategoriesPage() {
               </TableBody>
             </Table>
           )}
+          <PaginationBar currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
         </CardContent>
       </Card>
 

@@ -25,6 +25,54 @@ import {
 import { Plus, Pencil, Trash2, Search, BookMarked, Loader2 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { toast } from 'sonner';
+import {
+  Pagination, PaginationContent, PaginationEllipsis,
+  PaginationItem, PaginationLink, PaginationNext, PaginationPrevious,
+} from '@/components/ui/pagination';
+
+const PAGE_SIZE = 10;
+
+function getPageNumbers(current: number, total: number): (number | '...')[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const pages: (number | '...')[] = [1];
+  if (current > 3) pages.push('...');
+  for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) pages.push(i);
+  if (current < total - 2) pages.push('...');
+  pages.push(total);
+  return pages;
+}
+
+function PaginationBar({ currentPage, totalPages, onPageChange }: {
+  currentPage: number; totalPages: number; onPageChange: (p: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+  return (
+    <Pagination className="mt-4">
+      <PaginationContent>
+        <PaginationItem>
+          <PaginationPrevious href="#"
+            onClick={(e) => { e.preventDefault(); if (currentPage > 1) onPageChange(currentPage - 1); }}
+            className={currentPage === 1 ? 'pointer-events-none opacity-40' : ''} />
+        </PaginationItem>
+        {getPageNumbers(currentPage, totalPages).map((page, i) => (
+          <PaginationItem key={i}>
+            {page === '...' ? <PaginationEllipsis /> : (
+              <PaginationLink href="#" isActive={page === currentPage}
+                onClick={(e) => { e.preventDefault(); onPageChange(page as number); }}>
+                {page}
+              </PaginationLink>
+            )}
+          </PaginationItem>
+        ))}
+        <PaginationItem>
+          <PaginationNext href="#"
+            onClick={(e) => { e.preventDefault(); if (currentPage < totalPages) onPageChange(currentPage + 1); }}
+            className={currentPage === totalPages ? 'pointer-events-none opacity-40' : ''} />
+        </PaginationItem>
+      </PaginationContent>
+    </Pagination>
+  );
+}
 
 interface AuthorFormData {
   name: string;
@@ -58,6 +106,7 @@ export default function AdminAuthorsPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedAuthor, setSelectedAuthor] = useState<AuthorResponse | null>(null);
   const [formData, setFormData] = useState<AuthorFormData>(initialFormData);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const fetchAuthors = useCallback(async () => {
     try {
@@ -79,6 +128,10 @@ export default function AdminAuthorsPage() {
     authors.filter(a =>
       a.name.toLowerCase().includes(searchTerm.toLowerCase())
     ), [authors, searchTerm]);
+
+  useEffect(() => { setCurrentPage(1); }, [searchTerm]);
+  const totalPages = Math.ceil(filteredAuthors.length / PAGE_SIZE);
+  const paginatedAuthors = filteredAuthors.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const handleOpenDialog = (author?: AuthorResponse) => {
     if (author) {
@@ -173,6 +226,11 @@ export default function AdminAuthorsPage() {
           <CardTitle className="flex items-center gap-2">
             <BookMarked className="h-5 w-5" />
             Danh sách tác giả ({filteredAuthors.length})
+            {totalPages > 1 && (
+              <span className="text-sm font-normal text-muted-foreground">
+                — Trang {currentPage}/{totalPages}
+              </span>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -184,7 +242,6 @@ export default function AdminAuthorsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-16">Ảnh</TableHead>
                   <TableHead>Tên tác giả</TableHead>
                   <TableHead>Tiểu sử</TableHead>
                   <TableHead>Ngày sinh</TableHead>
@@ -199,15 +256,8 @@ export default function AdminAuthorsPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredAuthors.map((author) => (
+                  paginatedAuthors.map((author) => (
                     <TableRow key={author.id}>
-                      <TableCell>
-                        <Avatar>
-                          <AvatarFallback className="bg-primary/10 text-primary font-medium">
-                            {author.name.charAt(0).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                      </TableCell>
                       <TableCell>
                         <span className="font-medium text-foreground">{author.name}</span>
                       </TableCell>
@@ -249,6 +299,7 @@ export default function AdminAuthorsPage() {
               </TableBody>
             </Table>
           )}
+          <PaginationBar currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
         </CardContent>
       </Card>
 

@@ -23,6 +23,56 @@ import {
 import { Plus, Pencil, Trash2, Search, CheckCircle2, XCircle, Clock, Tag } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import {
+  Pagination, PaginationContent, PaginationEllipsis,
+  PaginationItem, PaginationLink, PaginationNext, PaginationPrevious,
+} from '@/components/ui/pagination';
+
+// ─── pagination ──────────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 10;
+
+function getPageNumbers(current: number, total: number): (number | '...')[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const pages: (number | '...')[] = [1];
+  if (current > 3) pages.push('...');
+  for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) pages.push(i);
+  if (current < total - 2) pages.push('...');
+  pages.push(total);
+  return pages;
+}
+
+function PaginationBar({ currentPage, totalPages, onPageChange }: {
+  currentPage: number; totalPages: number; onPageChange: (p: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+  return (
+    <Pagination className="mt-4">
+      <PaginationContent>
+        <PaginationItem>
+          <PaginationPrevious href="#"
+            onClick={(e) => { e.preventDefault(); if (currentPage > 1) onPageChange(currentPage - 1); }}
+            className={currentPage === 1 ? 'pointer-events-none opacity-40' : ''} />
+        </PaginationItem>
+        {getPageNumbers(currentPage, totalPages).map((page, i) => (
+          <PaginationItem key={i}>
+            {page === '...' ? <PaginationEllipsis /> : (
+              <PaginationLink href="#" isActive={page === currentPage}
+                onClick={(e) => { e.preventDefault(); onPageChange(page as number); }}>
+                {page}
+              </PaginationLink>
+            )}
+          </PaginationItem>
+        ))}
+        <PaginationItem>
+          <PaginationNext href="#"
+            onClick={(e) => { e.preventDefault(); if (currentPage < totalPages) onPageChange(currentPage + 1); }}
+            className={currentPage === totalPages ? 'pointer-events-none opacity-40' : ''} />
+        </PaginationItem>
+      </PaginationContent>
+    </Pagination>
+  );
+}
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -94,6 +144,7 @@ export default function AdminPromotionsPage() {
   const [selectedPromotion, setSelectedPromotion] = useState<PromotionResponse | null>(null);
   const [formData, setFormData] = useState<PromotionFormData>(initialFormData);
   const [isSaving, setIsSaving] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // ── fetch ──────────────────────────────────────────────────────────────────
 
@@ -101,7 +152,7 @@ export default function AdminPromotionsPage() {
     setIsLoading(true);
     try {
       const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-      const res = await fetch(`${API_BASE_URL}/promotions`, {
+      const res = await fetch(`${API_BASE_URL}/promotions/all`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       const data = await res.json();
@@ -128,6 +179,10 @@ export default function AdminPromotionsPage() {
       return matchSearch && matchType && matchStatus;
     });
   }, [promotions, searchTerm, typeFilter, statusFilter]);
+
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, typeFilter, statusFilter]);
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginatedPromotions = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   // ── dialog ─────────────────────────────────────────────────────────────────
 
@@ -308,6 +363,11 @@ export default function AdminPromotionsPage() {
             {isLoading && (
               <span className="ml-2 text-sm font-normal text-muted-foreground">Đang tải...</span>
             )}
+            {!isLoading && totalPages > 1 && (
+              <span className="ml-2 text-sm font-normal text-muted-foreground">
+                — Trang {currentPage}/{totalPages}
+              </span>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -327,7 +387,7 @@ export default function AdminPromotionsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((promo) => (
+                {paginatedPromotions.map((promo) => (
                   <TableRow key={promo.promotion_id}>
                     <TableCell>
                       <span className="rounded bg-muted px-2 py-1 font-mono text-sm font-semibold tracking-wide text-foreground">
@@ -404,6 +464,7 @@ export default function AdminPromotionsPage() {
               </TableBody>
             </Table>
           </div>
+          <PaginationBar currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
         </CardContent>
       </Card>
 

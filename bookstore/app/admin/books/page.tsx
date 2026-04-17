@@ -27,6 +27,54 @@ import {
 import { Plus, Pencil, Trash2, Search, Filter, UserPlus, ImageIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import {
+  Pagination, PaginationContent, PaginationEllipsis,
+  PaginationItem, PaginationLink, PaginationNext, PaginationPrevious,
+} from '@/components/ui/pagination';
+
+const PAGE_SIZE = 10;
+
+function getPageNumbers(current: number, total: number): (number | '...')[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const pages: (number | '...')[] = [1];
+  if (current > 3) pages.push('...');
+  for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) pages.push(i);
+  if (current < total - 2) pages.push('...');
+  pages.push(total);
+  return pages;
+}
+
+function PaginationBar({ currentPage, totalPages, onPageChange }: {
+  currentPage: number; totalPages: number; onPageChange: (p: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+  return (
+    <Pagination className="mt-4">
+      <PaginationContent>
+        <PaginationItem>
+          <PaginationPrevious href="#"
+            onClick={(e) => { e.preventDefault(); if (currentPage > 1) onPageChange(currentPage - 1); }}
+            className={currentPage === 1 ? 'pointer-events-none opacity-40' : ''} />
+        </PaginationItem>
+        {getPageNumbers(currentPage, totalPages).map((page, i) => (
+          <PaginationItem key={i}>
+            {page === '...' ? <PaginationEllipsis /> : (
+              <PaginationLink href="#" isActive={page === currentPage}
+                onClick={(e) => { e.preventDefault(); onPageChange(page as number); }}>
+                {page}
+              </PaginationLink>
+            )}
+          </PaginationItem>
+        ))}
+        <PaginationItem>
+          <PaginationNext href="#"
+            onClick={(e) => { e.preventDefault(); if (currentPage < totalPages) onPageChange(currentPage + 1); }}
+            className={currentPage === totalPages ? 'pointer-events-none opacity-40' : ''} />
+        </PaginationItem>
+      </PaginationContent>
+    </Pagination>
+  );
+}
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(value);
@@ -66,6 +114,7 @@ export default function AdminBooksPage() {
   const [isAddAuthorOpen, setIsAddAuthorOpen] = useState(false);
   const [newAuthor, setNewAuthor] = useState<AuthorRequest>({ name: '', bio: '', birthDate: null });
   const [isAddingAuthor, setIsAddingAuthor] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const loadBooks = async () => {
     setIsLoading(true);
@@ -96,6 +145,11 @@ export default function AdminBooksPage() {
       return matchSearch && matchCategory;
     });
   }, [books, searchTerm, categoryFilter, categories]);
+
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, categoryFilter]);
+
+  const totalPages = Math.ceil(filteredBooks.length / PAGE_SIZE);
+  const paginatedBooks = filteredBooks.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const handleOpenDialog = (book?: BookResponse) => {
     if (book) {
@@ -252,6 +306,11 @@ export default function AdminBooksPage() {
           <CardTitle>
             Danh sách sách ({filteredBooks.length})
             {isLoading && <span className="ml-2 text-sm font-normal text-muted-foreground">Đang tải...</span>}
+            {!isLoading && totalPages > 1 && (
+              <span className="ml-2 text-sm font-normal text-muted-foreground">
+                — Trang {currentPage}/{totalPages}
+              </span>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -269,7 +328,7 @@ export default function AdminBooksPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredBooks.map((book) => (
+                {paginatedBooks.map((book) => (
                   <TableRow key={book.bookId}>
                     <TableCell>
                       <div className="flex items-center gap-3">
@@ -336,6 +395,7 @@ export default function AdminBooksPage() {
               </TableBody>
             </Table>
           </div>
+          <PaginationBar currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
         </CardContent>
       </Card>
 

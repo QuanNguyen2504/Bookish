@@ -2,12 +2,17 @@ package com.bookish.bookish.service;
 
 import com.bookish.bookish.dto.request.CategoryRequest;
 import com.bookish.bookish.dto.response.CategoryResponse;
+import com.bookish.bookish.dto.response.PageResponse;
 import com.bookish.bookish.entity.Category;
 import com.bookish.bookish.exception.AppException;
 import com.bookish.bookish.exception.ErrorCode;
 import com.bookish.bookish.mapper.CategoryMapper;
 import com.bookish.bookish.repository.CategoryRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -66,5 +71,14 @@ public class CategoryService {
         }
 
         categoryRepository.delete(category);
+    }
+
+    public PageResponse<CategoryResponse> getCategoriesPaged(String keyword, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "name"));
+        Page<Category> catPage = categoryRepository.findAllPaged(keyword, pageable);
+        List<CategoryResponse> content = catPage.getContent().stream()
+                .map(CategoryMapper::toCategoryResponse)
+                .toList();
+        return PageResponse.from(catPage, content);
     }
 }

@@ -58,6 +58,8 @@ export const customerApi = {
       body: JSON.stringify(body),
     }, token),
 
+    
+
   delete: (id: number, token: string) =>
     request<void>(`/customers/${id}`, { method: 'DELETE' }, token),
 
