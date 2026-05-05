@@ -24,3 +24,4 @@ ngrok-v3-stable-windows-amd64/
 
 # Image folder (nếu là ảnh upload, không cần push)
 image/
+*.rar 
