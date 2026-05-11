@@ -12,7 +12,6 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Separator } from '@/components/ui/separator';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
@@ -29,18 +28,65 @@ import {
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
-const statusConfig: Record<string, { label: string; className: string; step: number }> = {
-  PENDING:    { label: 'Chờ xác nhận', className: 'bg-yellow-100 text-yellow-800', step: 1 },
-  CONFIRMED:  { label: 'Đã xác nhận',  className: 'bg-blue-100 text-blue-800',    step: 2 },
-  PROCESSING: { label: 'Đang xử lý',   className: 'bg-purple-100 text-purple-800', step: 3 },
-  SHIPPING:   { label: 'Đang giao',    className: 'bg-orange-100 text-orange-800', step: 4 },
-  DELIVERED:  { label: 'Đã giao',      className: 'bg-green-100 text-green-800',   step: 5 },
-  CANCELLED:  { label: 'Đã hủy',       className: 'bg-red-100 text-red-800',       step: 0 },
+// ── Design tokens (đồng bộ với trang chủ) ──────────────────────────────────
+const T = {
+  bg: '#f5f5f7',
+  card: '#ffffff',
+  border: '1px solid #d2d2d7',
+  text: '#1d1d1f',
+  sub: '#6e6e73',
+  accent: '#0071e3',
+  accentHover: 'rgba(0,113,227,0.08)',
+};
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+const statusConfig: Record<string, { label: string; color: string; bg: string; step: number }> = {
+  PENDING:    { label: 'Chờ xác nhận', color: '#92400e', bg: '#fef3c7', step: 1 },
+  CONFIRMED:  { label: 'Đã xác nhận',  color: '#1e40af', bg: '#dbeafe', step: 2 },
+  PROCESSING: { label: 'Đang xử lý',   color: '#6b21a8', bg: '#f3e8ff', step: 3 },
+  SHIPPING:   { label: 'Đang giao',    color: '#9a3412', bg: '#ffedd5', step: 4 },
+  DELIVERED:  { label: 'Đã giao',      color: '#166534', bg: '#dcfce7', step: 5 },
+  CANCELLED:  { label: 'Đã hủy',       color: '#991b1b', bg: '#fee2e2', step: 0 },
 };
 
 const steps = ['Chờ xác nhận', 'Đã xác nhận', 'Đang xử lý', 'Đang giao', 'Đã giao'];
 const POLL_INTERVAL = 30000;
 
+// ── Sub-components ───────────────────────────────────────────────────────────
+
+/** Card wrapper khớp với trang chủ */
+function Card({ children, className = '', delay = 0 }: {
+  children: React.ReactNode; className?: string; delay?: number;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.45, delay }}
+      className={cn('rounded-3xl px-8 py-7', className)}
+      style={{ background: T.card, border: T.border }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/** Label phụ màu accent — kiểu trang chủ */
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[11px] font-semibold tracking-widest uppercase mb-1"
+      style={{ color: T.accent }}>
+      {children}
+    </p>
+  );
+}
+
+/** Divider */
+function Divider() {
+  return <div style={{ height: 1, background: '#d2d2d7', margin: '16px 0' }} />;
+}
+
+// ── Main page ────────────────────────────────────────────────────────────────
 export default function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
@@ -58,13 +104,11 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const [newPhone, setNewPhone] = useState('');
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  // Review state: bookId → { rating, comment, submitting, done }
   const [reviewStates, setReviewStates] = useState<Record<number, {
     rating: number; hoverRating: number; comment: string; submitting: boolean; done: boolean;
   }>>({});
   const [reviewedBooks, setReviewedBooks] = useState<Set<number>>(new Set());
 
-  // ===== Return state =====
   const [existingReturn, setExistingReturn] = useState<ReturnRequestResponse | null>(null);
   const [returnDialogOpen, setReturnDialogOpen] = useState(false);
   const [bankDialogOpen, setBankDialogOpen] = useState(false);
@@ -78,8 +122,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
 
   const fetchOrder = useCallback(async (silent = false) => {
     if (!token || !id) return;
-    if (!silent) setLoading(true);
-    else setPolling(true);
+    if (!silent) setLoading(true); else setPolling(true);
     try {
       const data = await orderApi.getOrder(Number(id), token);
       setOrder(prev => {
@@ -91,38 +134,23 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       });
       setLastUpdated(new Date());
     } catch {
-      if (!silent) {
-        toast.error('Không tìm thấy đơn hàng');
-        router.push('/profile?tab=orders');
-      }
-    } finally {
-      setLoading(false);
-      setPolling(false);
-    }
+      if (!silent) { toast.error('Không tìm thấy đơn hàng'); router.push('/profile?tab=orders'); }
+    } finally { setLoading(false); setPolling(false); }
   }, [token, id, router]);
 
   useEffect(() => { fetchOrder(false); }, [fetchOrder]);
-
-  // Polling mỗi 30 giây
   useEffect(() => {
     const interval = setInterval(() => fetchOrder(true), POLL_INTERVAL);
     return () => clearInterval(interval);
   }, [fetchOrder]);
 
-  // Lấy thông tin return của đơn này (nếu có)
   const fetchReturn = useCallback(async () => {
     if (!token || !order) return;
     try {
       const all = await returnApi.getMyRequests(token);
       const found = all.find(r => r.orderId === order.orderId);
       setExistingReturn(found || null);
-      if (found) {
-        setBankForm({
-          bankAccount: found.bankAccount || '',
-          bankName: found.bankName || '',
-          accountHolder: found.accountHolder || '',
-        });
-      }
+      if (found) setBankForm({ bankAccount: found.bankAccount || '', bankName: found.bankName || '', accountHolder: found.accountHolder || '' });
     } catch { /* ignore */ }
   }, [token, order]);
 
@@ -136,22 +164,19 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     setCancelling(true);
     try {
       const updated = await orderApi.cancelOrder(order.orderId, token);
-      setOrder(updated);
-      setLastUpdated(new Date());
+      setOrder(updated); setLastUpdated(new Date());
       toast.success('Đã hủy đơn hàng!');
     } catch (e: any) { toast.error(e.message); }
     finally { setCancelling(false); }
   };
 
-  // User xác nhận đã nhận hàng khi status = SHIPPING
   const handleConfirmDelivered = async () => {
     if (!token || !order) return;
     if (!confirm('Bạn xác nhận đã nhận được hàng?')) return;
     setConfirming(true);
     try {
       const updated = await orderApi.confirmDelivered(order.orderId, token);
-      setOrder(updated);
-      setLastUpdated(new Date());
+      setOrder(updated); setLastUpdated(new Date());
       toast.success('Cảm ơn bạn đã xác nhận nhận hàng!');
     } catch (e: any) { toast.error(e.message); }
     finally { setConfirming(false); }
@@ -179,7 +204,6 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     finally { setSaving(false); }
   };
 
-  // ===== Return handlers =====
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
   const handleUploadImage = async (file: File) => {
@@ -197,11 +221,8 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       if (!res.ok) throw new Error(data.message || 'Upload thất bại');
       setReturnForm(prev => ({ ...prev, imageUrl: data.url }));
       toast.success('Đã tải ảnh lên');
-    } catch (e: any) {
-      toast.error(e.message);
-    } finally {
-      setUploadingImage(false);
-    }
+    } catch (e: any) { toast.error(e.message); }
+    finally { setUploadingImage(false); }
   };
 
   const handleSubmitReturn = async () => {
@@ -218,30 +239,22 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       setReturnDialogOpen(false);
       setReturnForm({ reason: 'BROKEN', description: '', imageUrl: '' });
       toast.success('Đã gửi yêu cầu hoàn trả. Chờ admin duyệt.');
-    } catch (e: any) {
-      toast.error(e.message);
-    } finally {
-      setSubmittingReturn(false);
-    }
+    } catch (e: any) { toast.error(e.message); }
+    finally { setSubmittingReturn(false); }
   };
 
   const handleSubmitBankInfo = async () => {
     if (!token || !existingReturn) return;
     if (!bankForm.bankAccount.trim() || !bankForm.bankName.trim() || !bankForm.accountHolder.trim()) {
-      toast.error('Vui lòng điền đầy đủ thông tin');
-      return;
+      toast.error('Vui lòng điền đầy đủ thông tin'); return;
     }
     setSubmittingBank(true);
     try {
       const updated = await returnApi.updateBankInfo(existingReturn.returnId, bankForm, token);
-      setExistingReturn(updated);
-      setBankDialogOpen(false);
+      setExistingReturn(updated); setBankDialogOpen(false);
       toast.success('Đã lưu thông tin ngân hàng');
-    } catch (e: any) {
-      toast.error(e.message);
-    } finally {
-      setSubmittingBank(false);
-    }
+    } catch (e: any) { toast.error(e.message); }
+    finally { setSubmittingBank(false); }
   };
 
   const handleCancelReturn = async () => {
@@ -251,43 +264,35 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       const updated = await returnApi.cancel(existingReturn.returnId, token);
       setExistingReturn(updated);
       toast.success('Đã hủy yêu cầu hoàn trả');
-    } catch (e: any) {
-      toast.error(e.message);
-    }
+    } catch (e: any) { toast.error(e.message); }
   };
 
+  // ── Loading / empty ────────────────────────────────────────────────────────
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    <div className="min-h-screen flex items-center justify-center" style={{ background: T.bg }}>
+      <Loader2 className="h-8 w-8 animate-spin" style={{ color: T.accent }} />
     </div>
   );
   if (!order) return null;
 
-  const status = statusConfig[order.status] ?? { label: order.status, className: 'bg-gray-100 text-gray-800', step: 0 };
-  const isPending = order.status === 'PENDING';
-  const isShipping = order.status === 'SHIPPING';
+  const status = statusConfig[order.status] ?? { label: order.status, color: '#6e6e73', bg: '#f5f5f7', step: 0 };
+  const isPending   = order.status === 'PENDING';
+  const isShipping  = order.status === 'SHIPPING';
   const isDelivered = order.status === 'DELIVERED';
   const isCancelled = order.status === 'CANCELLED';
 
-  // Tính còn trong thời hạn 7 ngày hoàn trả không
   const daysSinceDelivered = Math.floor(
     (Date.now() - new Date(order.createdAt).getTime()) / (1000 * 60 * 60 * 24)
   );
   const canRequestReturn = isDelivered && daysSinceDelivered <= 7 && !existingReturn;
   const daysLeft = Math.max(0, 7 - daysSinceDelivered);
 
-  // Helpers cho review
   const getReviewState = (bookId: number) => reviewStates[bookId] ?? {
     rating: 5, hoverRating: 0, comment: '', submitting: false, done: false,
   };
-
   const setReviewField = (bookId: number, field: string, value: any) => {
-    setReviewStates(prev => ({
-      ...prev,
-      [bookId]: { ...getReviewState(bookId), [field]: value },
-    }));
+    setReviewStates(prev => ({ ...prev, [bookId]: { ...getReviewState(bookId), [field]: value } }));
   };
-
   const handleSubmitReview = async (bookId: number) => {
     if (!token) return;
     const rs = getReviewState(bookId);
@@ -297,250 +302,372 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       setReviewedBooks(prev => new Set([...prev, bookId]));
       setReviewField(bookId, 'done', true);
       toast.success('Đánh giá đã được gửi!');
-    } catch (e: any) {
-      toast.error(e.message || 'Gửi đánh giá thất bại');
-    } finally {
-      setReviewField(bookId, 'submitting', false);
-    }
+    } catch (e: any) { toast.error(e.message || 'Gửi đánh giá thất bại'); }
+    finally { setReviewField(bookId, 'submitting', false); }
   };
 
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen py-8">
-      <div className="container mx-auto px-4 max-w-3xl">
+    <div style={{ background: T.bg, minHeight: '100vh' }}>
+      <div className="max-w-3xl mx-auto px-6 py-10">
 
-        {/* Header */}
-        <div className="flex items-center gap-4 mb-2">
-          <Link href="/profile?tab=orders">
-            <Button variant="ghost" size="icon" className="rounded-full"><ArrowLeft className="h-5 w-5" /></Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">
-              Đơn #{String(order.orderId).padStart(6, '0')}
-            </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {new Date(order.createdAt).toLocaleDateString('vi-VN', {
-                day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
-              })}
+        {/* ── Header ── */}
+        <motion.div
+          initial={{ opacity: 0, y: -12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="mb-6"
+        >
+          <div className="flex items-center gap-3 mb-4">
+            <Link href="/profile?tab=orders">
+              <button
+                className="flex items-center justify-center h-9 w-9 rounded-full transition-all"
+                style={{ background: T.card, border: T.border }}
+                onMouseEnter={e => (e.currentTarget.style.background = '#e8e8ed')}
+                onMouseLeave={e => (e.currentTarget.style.background = T.card)}
+              >
+                <ArrowLeft className="h-4 w-4" style={{ color: T.text }} />
+              </button>
+            </Link>
+            <div className="flex-1">
+              <SectionLabel>Chi tiết đơn hàng</SectionLabel>
+              <h1 className="font-bold tracking-[-0.03em] leading-tight"
+                style={{ fontSize: 'clamp(22px, 3vw, 32px)', color: T.text }}>
+                Đơn #{String(order.orderId).padStart(6, '0')}
+              </h1>
+              <p className="text-[13px] mt-0.5" style={{ color: T.sub }}>
+                {new Date(order.createdAt).toLocaleDateString('vi-VN', {
+                  day: '2-digit', month: '2-digit', year: 'numeric',
+                  hour: '2-digit', minute: '2-digit',
+                })}
+              </p>
+            </div>
+
+            {/* Badge trạng thái */}
+            <div className="flex items-center gap-2">
+              <span
+                className="text-[12px] font-semibold px-3 py-1.5 rounded-full"
+                style={{ color: status.color, background: status.bg }}
+              >
+                {status.label}
+              </span>
+              <button
+                onClick={() => fetchOrder(true)}
+                disabled={polling}
+                title="Làm mới"
+                className="flex items-center justify-center h-8 w-8 rounded-full transition-all"
+                style={{ background: T.card, border: T.border }}
+                onMouseEnter={e => (e.currentTarget.style.background = '#e8e8ed')}
+                onMouseLeave={e => (e.currentTarget.style.background = T.card)}
+              >
+                <RefreshCw className={cn('h-3.5 w-3.5', polling && 'animate-spin')}
+                  style={{ color: T.sub }} />
+              </button>
+            </div>
+          </div>
+
+          {lastUpdated && (
+            <p className="text-[12px] text-right" style={{ color: T.sub }}>
+              Cập nhật lúc {lastUpdated.toLocaleTimeString('vi-VN')}
+              {' · '}
+              <span style={{ color: T.accent }}>Tự động mỗi 30 giây</span>
             </p>
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            <span className={cn('text-xs font-medium px-3 py-1 rounded-full', status.className)}>
-              {status.label}
-            </span>
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full"
-              onClick={() => fetchOrder(true)} disabled={polling} title="Làm mới">
-              <RefreshCw className={cn('h-3.5 w-3.5', polling && 'animate-spin')} />
-            </Button>
-          </div>
-        </div>
-
-        {/* Last updated */}
-        {lastUpdated && (
-          <p className="text-xs text-muted-foreground text-right mb-4">
-            Cập nhật lúc {lastUpdated.toLocaleTimeString('vi-VN')}
-            {' · '}
-            <span className="text-primary/70">Tự động mỗi 30 giây</span>
-          </p>
-        )}
+          )}
+        </motion.div>
 
         <div className="space-y-4">
 
-          {/* Thanh tiến trình */}
+          {/* ── Thanh tiến trình ── */}
           {!isCancelled && (
-            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-              className="bg-card rounded-2xl border border-border p-6">
-              <div className="relative flex items-start justify-between">
-                <div className="absolute top-4 left-8 right-8 h-0.5 bg-border" />
-                <div className="absolute top-4 left-8 h-0.5 bg-primary transition-all"
-                  style={{ width: status.step > 1 ? `${((status.step - 1) / 4) * 100}%` : '0%' }} />
+            <Card delay={0}>
+              <SectionLabel>Tiến trình đơn hàng</SectionLabel>
+              <div className="relative flex items-start justify-between mt-5">
+                {/* Track nền */}
+                <div className="absolute top-4 left-8 right-8 h-0.5" style={{ background: '#d2d2d7' }} />
+                {/* Track active */}
+                <div
+                  className="absolute top-4 left-8 h-0.5 transition-all"
+                  style={{
+                    width: status.step > 1 ? `${((status.step - 1) / 4) * 100}%` : '0%',
+                    background: T.accent,
+                  }}
+                />
                 {steps.map((step, i) => {
-                  const done = status.step > i + 1;
+                  const done   = status.step > i + 1;
                   const active = status.step === i + 1;
                   return (
                     <div key={step} className="flex flex-col items-center gap-2 z-10 flex-1">
-                      <div className={cn(
-                        'w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium border-2 bg-background transition-colors',
-                        done ? 'bg-primary border-primary' :
-                        active ? 'border-primary text-primary' : 'border-border text-muted-foreground'
-                      )}>
+                      <div
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold border-2 transition-colors"
+                        style={{
+                          background: done ? T.accent : T.card,
+                          borderColor: done || active ? T.accent : '#d2d2d7',
+                          color: done ? '#fff' : active ? T.accent : T.sub,
+                        }}
+                      >
                         {done ? <Check className="h-3.5 w-3.5 text-white" /> : i + 1}
                       </div>
-                      <span className={cn('text-xs text-center leading-tight',
-                        active ? 'text-primary font-medium' : 'text-muted-foreground')}>
+                      <span
+                        className="text-[11px] text-center leading-tight font-medium"
+                        style={{ color: active ? T.accent : T.sub }}
+                      >
                         {step}
                       </span>
                     </div>
                   );
                 })}
               </div>
-            </motion.div>
+            </Card>
           )}
 
-          {/* Nút xác nhận đã nhận hàng — chỉ hiện khi SHIPPING */}
+          {/* ── Banner: Đang giao ── */}
           {isShipping && (
-            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-              <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 flex items-center justify-between gap-4">
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+              <div
+                className="rounded-3xl px-8 py-5 flex items-center justify-between gap-4"
+                style={{ background: '#fff7ed', border: '1px solid #fed7aa' }}
+              >
                 <div>
-                  <p className="font-medium text-orange-800 text-sm">Đơn hàng đang được giao đến bạn</p>
-                  <p className="text-xs text-orange-600 mt-0.5">Xác nhận khi đã nhận được hàng</p>
+                  <p className="font-semibold text-[14px]" style={{ color: '#9a3412' }}>
+                    Đơn hàng đang được giao đến bạn
+                  </p>
+                  <p className="text-[13px] mt-0.5" style={{ color: '#c2410c' }}>
+                    Xác nhận khi đã nhận được hàng
+                  </p>
                 </div>
-                <Button className="bg-orange-500 hover:bg-orange-600 text-white rounded-full gap-2 flex-shrink-0"
-                  onClick={handleConfirmDelivered} disabled={confirming}>
+                <button
+                  onClick={handleConfirmDelivered}
+                  disabled={confirming}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-[13px] font-semibold text-white transition-opacity flex-shrink-0"
+                  style={{ background: '#ea580c' }}
+                  onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')}
+                  onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+                >
                   {confirming
                     ? <><Loader2 className="h-4 w-4 animate-spin" />Đang xử lý...</>
                     : <><CheckCircle2 className="h-4 w-4" />Đã nhận hàng</>
                   }
-                </Button>
+                </button>
               </div>
             </motion.div>
           )}
 
-          {/* Thông báo hoàn thành */}
+          {/* ── Banner: Đã giao ── */}
           {isDelivered && (
-            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-              <div className="bg-green-50 border border-green-200 rounded-2xl p-4 flex items-center gap-3">
-                <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+              <div
+                className="rounded-3xl px-8 py-5 flex items-center gap-3"
+                style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}
+              >
+                <CheckCircle2 className="h-5 w-5 flex-shrink-0" style={{ color: '#16a34a' }} />
                 <div>
-                  <p className="font-medium text-green-800 text-sm">Đơn hàng đã hoàn thành</p>
-                  <p className="text-xs text-green-600 mt-0.5">Cảm ơn bạn đã mua hàng tại Bookish!</p>
+                  <p className="font-semibold text-[14px]" style={{ color: '#166534' }}>
+                    Đơn hàng đã hoàn thành
+                  </p>
+                  <p className="text-[13px] mt-0.5" style={{ color: '#15803d' }}>
+                    Cảm ơn bạn đã mua hàng tại Bookish!
+                  </p>
                 </div>
               </div>
             </motion.div>
           )}
 
-          {/* Yêu cầu hoàn trả — chỉ hiện khi DELIVERED */}
+          {/* ── Hoàn trả ── */}
           {isDelivered && (
-            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.03 }}>
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
               {existingReturn ? (
-                // Đã có yêu cầu hoàn trả
-                <div className="bg-card rounded-2xl border border-border p-5 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <RotateCcw className="h-4 w-4 text-primary" />
-                      <h3 className="font-semibold text-sm">Yêu cầu hoàn trả #{String(existingReturn.returnId).padStart(4, '0')}</h3>
+                <Card>
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <SectionLabel>Yêu cầu hoàn trả</SectionLabel>
+                      <h3 className="font-semibold text-[15px]" style={{ color: T.text }}>
+                        #{String(existingReturn.returnId).padStart(4, '0')}
+                      </h3>
                     </div>
-                    <span className={cn('text-xs font-medium px-2.5 py-1 rounded-full',
-                      existingReturn.status === 'REQUESTED' && 'bg-amber-100 text-amber-700',
-                      existingReturn.status === 'APPROVED' && 'bg-blue-100 text-blue-700',
-                      existingReturn.status === 'REJECTED' && 'bg-red-100 text-red-700',
-                      existingReturn.status === 'RETURNED' && 'bg-purple-100 text-purple-700',
-                      existingReturn.status === 'REFUNDED' && 'bg-emerald-100 text-emerald-700',
-                      existingReturn.status === 'CANCELLED_BY_USER' && 'bg-gray-100 text-gray-700',
-                    )}>
+                    <span
+                      className="text-[12px] font-semibold px-3 py-1 rounded-full"
+                      style={{
+                        color: existingReturn.status === 'REQUESTED'  ? '#92400e'
+                             : existingReturn.status === 'APPROVED'   ? '#1e40af'
+                             : existingReturn.status === 'REJECTED'   ? '#991b1b'
+                             : existingReturn.status === 'RETURNED'   ? '#6b21a8'
+                             : existingReturn.status === 'REFUNDED'   ? '#166534'
+                             : '#374151',
+                        background: existingReturn.status === 'REQUESTED'  ? '#fef3c7'
+                                  : existingReturn.status === 'APPROVED'   ? '#dbeafe'
+                                  : existingReturn.status === 'REJECTED'   ? '#fee2e2'
+                                  : existingReturn.status === 'RETURNED'   ? '#f3e8ff'
+                                  : existingReturn.status === 'REFUNDED'   ? '#dcfce7'
+                                  : '#f3f4f6',
+                      }}
+                    >
                       {STATUS_LABELS[existingReturn.status]}
                     </span>
                   </div>
 
-                  <div className="text-sm space-y-1">
-                    <p><span className="text-muted-foreground">Lý do:</span> {REASON_LABELS[existingReturn.reason]}</p>
+                  <div className="space-y-1.5 text-[14px]">
+                    <p style={{ color: T.text }}>
+                      <span style={{ color: T.sub }}>Lý do: </span>
+                      {REASON_LABELS[existingReturn.reason]}
+                    </p>
                     {existingReturn.description && (
-                      <p className="text-muted-foreground text-xs">{existingReturn.description}</p>
+                      <p className="text-[13px]" style={{ color: T.sub }}>{existingReturn.description}</p>
                     )}
-                    <p><span className="text-muted-foreground">Số tiền hoàn:</span>{' '}
-                      <span className="font-semibold text-primary">
+                    <p style={{ color: T.text }}>
+                      <span style={{ color: T.sub }}>Số tiền hoàn: </span>
+                      <span className="font-semibold" style={{ color: T.accent }}>
                         {existingReturn.refundAmount.toLocaleString('vi-VN')}đ
                       </span>
                     </p>
                   </div>
 
                   {existingReturn.adminNote && (
-                    <div className="bg-muted/50 rounded-lg p-3 text-sm">
-                      <p className="text-xs text-muted-foreground mb-1">Ghi chú từ admin:</p>
-                      <p>{existingReturn.adminNote}</p>
+                    <div className="mt-4 rounded-2xl p-4" style={{ background: T.bg }}>
+                      <p className="text-[11px] font-semibold uppercase tracking-widest mb-1" style={{ color: T.sub }}>
+                        Ghi chú từ admin
+                      </p>
+                      <p className="text-[14px]" style={{ color: T.text }}>{existingReturn.adminNote}</p>
                     </div>
                   )}
 
-                  {/* Nhắc user nhập STK khi đã APPROVED hoặc RETURNED */}
                   {(existingReturn.status === 'APPROVED' || existingReturn.status === 'RETURNED') && (
                     <>
                       {existingReturn.bankAccount ? (
-                        <div className="bg-muted/50 rounded-lg p-3 text-sm space-y-1">
-                          <p className="text-xs text-muted-foreground">Thông tin nhận hoàn tiền</p>
-                          <p>{existingReturn.bankName} · {existingReturn.bankAccount}</p>
-                          <p className="text-xs">{existingReturn.accountHolder}</p>
-                          <button onClick={() => setBankDialogOpen(true)}
-                            className="text-xs text-primary hover:underline mt-1">
+                        <div className="mt-4 rounded-2xl p-4" style={{ background: T.bg }}>
+                          <p className="text-[11px] font-semibold uppercase tracking-widest mb-2" style={{ color: T.sub }}>
+                            Thông tin nhận hoàn tiền
+                          </p>
+                          <p className="text-[14px]" style={{ color: T.text }}>
+                            {existingReturn.bankName} · {existingReturn.bankAccount}
+                          </p>
+                          <p className="text-[13px]" style={{ color: T.sub }}>{existingReturn.accountHolder}</p>
+                          <button
+                            onClick={() => setBankDialogOpen(true)}
+                            className="text-[13px] mt-2 transition-opacity"
+                            style={{ color: T.accent }}
+                            onMouseEnter={e => (e.currentTarget.style.opacity = '0.7')}
+                            onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+                          >
                             Chỉnh sửa
                           </button>
                         </div>
                       ) : (
-                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
-                          <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                        <div className="mt-4 rounded-2xl p-4 flex items-start gap-3"
+                          style={{ background: '#fff7ed', border: '1px solid #fed7aa' }}>
+                          <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" style={{ color: '#c2410c' }} />
                           <div className="flex-1">
-                            <p className="text-sm text-amber-800 font-medium">Cần cung cấp thông tin ngân hàng</p>
-                            <p className="text-xs text-amber-700 mt-0.5">
+                            <p className="font-semibold text-[14px]" style={{ color: '#9a3412' }}>
+                              Cần cung cấp thông tin ngân hàng
+                            </p>
+                            <p className="text-[13px] mt-0.5" style={{ color: '#c2410c' }}>
                               Vui lòng nhập STK để nhận tiền hoàn
                             </p>
                           </div>
-                          <Button size="sm" onClick={() => setBankDialogOpen(true)}
-                            className="bg-amber-600 hover:bg-amber-700 text-white">
+                          <button
+                            onClick={() => setBankDialogOpen(true)}
+                            className="px-4 py-2 rounded-full text-[13px] font-medium text-white flex-shrink-0"
+                            style={{ background: '#ea580c' }}
+                          >
                             Nhập STK
-                          </Button>
+                          </button>
                         </div>
                       )}
                     </>
                   )}
 
-                  {/* Nút hủy khi còn REQUESTED */}
                   {existingReturn.status === 'REQUESTED' && (
-                    <Button variant="outline" size="sm"
-                      className="w-full border-destructive text-destructive hover:bg-destructive hover:text-white"
-                      onClick={handleCancelReturn}>
+                    <button
+                      onClick={handleCancelReturn}
+                      className="mt-4 w-full py-2.5 rounded-full text-[14px] font-medium transition-all"
+                      style={{ color: '#dc2626', border: '1.5px solid #dc2626', background: 'transparent' }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#dc2626'; (e.currentTarget as HTMLElement).style.color = '#fff'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = '#dc2626'; }}
+                    >
                       Hủy yêu cầu
-                    </Button>
+                    </button>
                   )}
-                </div>
+                </Card>
               ) : canRequestReturn ? (
-                // Chưa có yêu cầu, còn trong 7 ngày
-                <div className="bg-card rounded-2xl border border-border p-5 flex items-center justify-between gap-4">
-                  <div>
-                    <h3 className="font-semibold text-sm mb-0.5">Gặp vấn đề với đơn hàng?</h3>
-                    <p className="text-xs text-muted-foreground">
-                      Bạn còn {daysLeft} ngày để yêu cầu hoàn trả
-                    </p>
+                <Card>
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <SectionLabel>Hoàn trả</SectionLabel>
+                      <h3 className="font-semibold text-[15px]" style={{ color: T.text }}>
+                        Gặp vấn đề với đơn hàng?
+                      </h3>
+                      <p className="text-[13px] mt-0.5" style={{ color: T.sub }}>
+                        Bạn còn {daysLeft} ngày để yêu cầu hoàn trả
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setReturnDialogOpen(true)}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-[13px] font-medium flex-shrink-0 transition-all"
+                      style={{ color: T.accent, border: `1.5px solid ${T.accent}`, background: 'transparent' }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = T.accent; (e.currentTarget as HTMLElement).style.color = '#fff'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = T.accent; }}
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      Yêu cầu hoàn trả
+                    </button>
                   </div>
-                  <Button variant="outline" className="gap-2 flex-shrink-0 rounded-full"
-                    onClick={() => setReturnDialogOpen(true)}>
-                    <RotateCcw className="h-4 w-4" />
-                    Yêu cầu hoàn trả
-                  </Button>
-                </div>
+                </Card>
               ) : daysSinceDelivered > 7 ? (
-                // Quá 7 ngày
-                <div className="text-xs text-muted-foreground text-center py-2">
+                <p className="text-[13px] text-center py-2" style={{ color: T.sub }}>
                   Đã quá 7 ngày — không thể yêu cầu hoàn trả
-                </div>
+                </p>
               ) : null}
             </motion.div>
           )}
 
-          {/* Thông tin giao hàng */}
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
-            className="bg-card rounded-2xl border border-border p-6 space-y-4">
-            <h2 className="font-semibold text-foreground">Thông tin giao hàng</h2>
+          {/* ── Thông tin giao hàng ── */}
+          <Card delay={0.1}>
+            <SectionLabel>Thông tin giao hàng</SectionLabel>
+            <h2 className="font-semibold text-[17px] mb-5" style={{ color: T.text }}>
+              Địa chỉ & liên hệ
+            </h2>
 
             {/* Địa chỉ */}
-            <div className="flex items-start gap-3">
-              <MapPin className="h-4 w-4 text-primary mt-1 flex-shrink-0" />
+            <div className="flex items-start gap-3 mb-4">
+              <div className="h-8 w-8 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: T.accentHover }}>
+                <MapPin className="h-4 w-4" style={{ color: T.accent }} />
+              </div>
               <div className="flex-1">
-                <p className="text-xs text-muted-foreground mb-1">Địa chỉ</p>
+                <p className="text-[11px] font-semibold uppercase tracking-widest mb-1" style={{ color: T.sub }}>
+                  Địa chỉ
+                </p>
                 {editAddress ? (
                   <div className="flex gap-2">
-                    <Input value={newAddress} onChange={(e) => setNewAddress(e.target.value)}
-                      className="rounded-xl text-sm h-9" autoFocus />
-                    <Button size="icon" className="h-9 w-9 rounded-xl" onClick={handleSaveAddress} disabled={saving}>
+                    <input
+                      value={newAddress}
+                      onChange={e => setNewAddress(e.target.value)}
+                      autoFocus
+                      className="flex-1 px-4 py-2 rounded-xl text-[14px] outline-none"
+                      style={{ background: T.bg, border: T.border, color: T.text }}
+                    />
+                    <button onClick={handleSaveAddress} disabled={saving}
+                      className="h-9 w-9 rounded-xl flex items-center justify-center text-white"
+                      style={{ background: T.accent }}>
                       <Check className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button size="icon" variant="ghost" className="h-9 w-9 rounded-xl" onClick={() => setEditAddress(false)}>
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
+                    </button>
+                    <button onClick={() => setEditAddress(false)}
+                      className="h-9 w-9 rounded-xl flex items-center justify-center"
+                      style={{ background: T.bg, border: T.border }}>
+                      <X className="h-3.5 w-3.5" style={{ color: T.sub }} />
+                    </button>
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <p className="text-sm text-foreground flex-1">{order.shippingAddress || 'Chưa có địa chỉ'}</p>
+                    <p className="text-[14px] flex-1" style={{ color: T.text }}>
+                      {order.shippingAddress || 'Chưa có địa chỉ'}
+                    </p>
                     {isPending && (
                       <button onClick={() => { setNewAddress(order.shippingAddress || ''); setEditAddress(true); }}>
-                        <Pencil className="h-3.5 w-3.5 text-muted-foreground hover:text-primary transition-colors" />
+                        <Pencil className="h-3.5 w-3.5 transition-colors"
+                          style={{ color: T.sub }}
+                          onMouseEnter={e => (e.currentTarget.style.color = T.accent)}
+                          onMouseLeave={e => (e.currentTarget.style.color = T.sub)}
+                        />
                       </button>
                     )}
                   </div>
@@ -548,28 +675,50 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               </div>
             </div>
 
+            <Divider />
+
             {/* SĐT */}
-            <div className="flex items-start gap-3">
-              <Phone className="h-4 w-4 text-primary mt-1 flex-shrink-0" />
+            <div className="flex items-start gap-3 mb-4">
+              <div className="h-8 w-8 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: T.accentHover }}>
+                <Phone className="h-4 w-4" style={{ color: T.accent }} />
+              </div>
               <div className="flex-1">
-                <p className="text-xs text-muted-foreground mb-1">Số điện thoại</p>
+                <p className="text-[11px] font-semibold uppercase tracking-widest mb-1" style={{ color: T.sub }}>
+                  Số điện thoại
+                </p>
                 {editPhone ? (
                   <div className="flex gap-2">
-                    <Input value={newPhone} onChange={(e) => setNewPhone(e.target.value)}
-                      className="rounded-xl text-sm h-9" autoFocus />
-                    <Button size="icon" className="h-9 w-9 rounded-xl" onClick={handleSavePhone} disabled={saving}>
+                    <input
+                      value={newPhone}
+                      onChange={e => setNewPhone(e.target.value)}
+                      autoFocus
+                      className="flex-1 px-4 py-2 rounded-xl text-[14px] outline-none"
+                      style={{ background: T.bg, border: T.border, color: T.text }}
+                    />
+                    <button onClick={handleSavePhone} disabled={saving}
+                      className="h-9 w-9 rounded-xl flex items-center justify-center text-white"
+                      style={{ background: T.accent }}>
                       <Check className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button size="icon" variant="ghost" className="h-9 w-9 rounded-xl" onClick={() => setEditPhone(false)}>
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
+                    </button>
+                    <button onClick={() => setEditPhone(false)}
+                      className="h-9 w-9 rounded-xl flex items-center justify-center"
+                      style={{ background: T.bg, border: T.border }}>
+                      <X className="h-3.5 w-3.5" style={{ color: T.sub }} />
+                    </button>
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <p className="text-sm text-foreground flex-1">{order.phone || 'Chưa có SĐT'}</p>
+                    <p className="text-[14px] flex-1" style={{ color: T.text }}>
+                      {order.phone || 'Chưa có SĐT'}
+                    </p>
                     {isPending && (
                       <button onClick={() => { setNewPhone(order.phone || ''); setEditPhone(true); }}>
-                        <Pencil className="h-3.5 w-3.5 text-muted-foreground hover:text-primary transition-colors" />
+                        <Pencil className="h-3.5 w-3.5 transition-colors"
+                          style={{ color: T.sub }}
+                          onMouseEnter={e => (e.currentTarget.style.color = T.accent)}
+                          onMouseLeave={e => (e.currentTarget.style.color = T.sub)}
+                        />
                       </button>
                     )}
                   </div>
@@ -577,113 +726,167 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               </div>
             </div>
 
-            {/* PTTT */}
+            <Divider />
+
+            {/* Phương thức TT */}
             <div className="flex items-start gap-3">
-              {order.paymentMethod === 'QR_CODE'
-                ? <QrCode className="h-4 w-4 text-primary mt-1 flex-shrink-0" />
-                : <Banknote className="h-4 w-4 text-primary mt-1 flex-shrink-0" />
-              }
+              <div className="h-8 w-8 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: T.accentHover }}>
+                {order.paymentMethod === 'QR_CODE'
+                  ? <QrCode className="h-4 w-4" style={{ color: T.accent }} />
+                  : <Banknote className="h-4 w-4" style={{ color: T.accent }} />
+                }
+              </div>
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Phương thức thanh toán</p>
-                <p className="text-sm text-foreground">
-                  {order.paymentMethod === 'QR_CODE' ? 'QR Code (Chuyển khoản)' : 'Tiền mặt khi nhận hàng (COD)'}
+                <p className="text-[11px] font-semibold uppercase tracking-widest mb-1" style={{ color: T.sub }}>
+                  Phương thức thanh toán
+                </p>
+                <p className="text-[14px]" style={{ color: T.text }}>
+                  {order.paymentMethod === 'QR_CODE'
+                    ? 'QR Code (Chuyển khoản)'
+                    : 'Tiền mặt khi nhận hàng (COD)'}
                 </p>
               </div>
             </div>
-          </motion.div>
+          </Card>
 
-          {/* Sản phẩm */}
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-            className="bg-card rounded-2xl border border-border p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Package className="h-4 w-4 text-primary" />
-              <h2 className="font-semibold text-foreground">Sản phẩm ({order.items.length})</h2>
+          {/* ── Sản phẩm ── */}
+          <Card delay={0.12}>
+            <div className="flex items-center gap-2 mb-5">
+              <div className="h-8 w-8 rounded-xl flex items-center justify-center"
+                style={{ background: T.accentHover }}>
+                <Package className="h-4 w-4" style={{ color: T.accent }} />
+              </div>
+              <div>
+                <SectionLabel>Đơn hàng</SectionLabel>
+                <h2 className="font-semibold text-[17px]" style={{ color: T.text }}>
+                  Sản phẩm ({order.items.length})
+                </h2>
+              </div>
             </div>
+
             <div className="space-y-4">
-              {order.items.map((item) => (
-                <div key={item.orderItemId} className="flex gap-3">
-                  <Link href={`/book/${item.bookId}`} className="flex-shrink-0">
-                    <div className="relative w-14 aspect-[3/4] rounded-lg overflow-hidden bg-muted">
-                      <Image src={item.image || 'https://picsum.photos/id/24/400/600'} alt={item.title} fill className="object-cover" />
-                    </div>
-                  </Link>
-                  <div className="flex-1 min-w-0">
-                    <Link href={`/book/${item.bookId}`}>
-                      <p className="text-sm font-medium text-foreground hover:text-primary line-clamp-2">{item.title}</p>
+              {order.items.map((item, idx) => (
+                <div key={item.orderItemId}>
+                  <div className="flex gap-4">
+                    <Link href={`/book/${item.bookId}`} className="flex-shrink-0">
+                      <div className="relative w-14 rounded-xl overflow-hidden"
+                        style={{ aspectRatio: '3/4', background: T.bg }}>
+                        <Image
+                          src={item.image || 'https://picsum.photos/id/24/400/600'}
+                          alt={item.title} fill className="object-cover"
+                        />
+                      </div>
                     </Link>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {item.price.toLocaleString('vi-VN')}đ × {item.quantity}
+                    <div className="flex-1 min-w-0">
+                      <Link href={`/book/${item.bookId}`}>
+                        <p className="text-[14px] font-medium line-clamp-2 transition-colors"
+                          style={{ color: T.text }}
+                          onMouseEnter={e => (e.currentTarget.style.color = T.accent)}
+                          onMouseLeave={e => (e.currentTarget.style.color = T.text)}
+                        >
+                          {item.title}
+                        </p>
+                      </Link>
+                      <p className="text-[13px] mt-1" style={{ color: T.sub }}>
+                        {item.price.toLocaleString('vi-VN')}đ × {item.quantity}
+                      </p>
+                    </div>
+                    <p className="text-[14px] font-semibold whitespace-nowrap" style={{ color: T.text }}>
+                      {item.subtotal.toLocaleString('vi-VN')}đ
                     </p>
                   </div>
-                  <p className="text-sm font-semibold text-foreground whitespace-nowrap">
-                    {item.subtotal.toLocaleString('vi-VN')}đ
-                  </p>
+                  {idx < order.items.length - 1 && <Divider />}
                 </div>
               ))}
             </div>
 
-            <Separator className="my-4" />
+            <Divider />
 
             <div className="space-y-2">
-              <div className="flex justify-between text-sm text-muted-foreground">
+              <div className="flex justify-between text-[14px]" style={{ color: T.sub }}>
                 <span>Tạm tính</span>
                 <span>{(order.totalPrice - order.shippingFee).toLocaleString('vi-VN')}đ</span>
               </div>
-              <div className="flex justify-between text-sm text-muted-foreground">
+              <div className="flex justify-between text-[14px]" style={{ color: T.sub }}>
                 <span>Phí vận chuyển</span>
                 <span>{order.shippingFee === 0 ? 'Miễn phí' : order.shippingFee.toLocaleString('vi-VN') + 'đ'}</span>
               </div>
-              <Separator />
-              <div className="flex justify-between font-bold text-foreground">
+              <Divider />
+              <div className="flex justify-between text-[16px] font-bold" style={{ color: T.text }}>
                 <span>Tổng cộng</span>
-                <span className="text-primary">{order.totalPrice.toLocaleString('vi-VN')}đ</span>
+                <span style={{ color: T.accent }}>{order.totalPrice.toLocaleString('vi-VN')}đ</span>
               </div>
             </div>
-          </motion.div>
+          </Card>
 
-          {/* Hủy đơn */}
+          {/* ── Hủy đơn ── */}
           {isPending && (
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-              <Button variant="outline"
-                className="w-full rounded-full border-destructive text-destructive hover:bg-destructive hover:text-white"
-                onClick={handleCancel} disabled={cancelling}>
+              <button
+                onClick={handleCancel}
+                disabled={cancelling}
+                className="w-full py-3 rounded-full text-[15px] font-medium transition-all"
+                style={{ color: '#dc2626', border: '1.5px solid #dc2626', background: 'transparent' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#dc2626'; (e.currentTarget as HTMLElement).style.color = '#fff'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = '#dc2626'; }}
+              >
                 {cancelling
-                  ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Đang hủy...</>
+                  ? <span className="inline-flex items-center gap-2 justify-center">
+                      <Loader2 className="h-4 w-4 animate-spin" />Đang hủy...
+                    </span>
                   : 'Hủy đơn hàng'
                 }
-              </Button>
+              </button>
             </motion.div>
           )}
 
-          {/* Đánh giá sách sau khi DELIVERED */}
+          {/* ── Đánh giá sản phẩm ── */}
           {isDelivered && (
-            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-              className="space-y-4">
-              <h2 className="font-bold text-lg text-foreground">Đánh giá sản phẩm</h2>
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.18 }}
+              className="space-y-3"
+            >
+              <div className="px-2">
+                <SectionLabel>Sau khi nhận hàng</SectionLabel>
+                <h2 className="font-bold text-[20px] tracking-[-0.02em]" style={{ color: T.text }}>
+                  Đánh giá sản phẩm
+                </h2>
+              </div>
+
               {order.items.map((item) => {
                 const rs = getReviewState(item.bookId);
                 const isDone = rs.done || reviewedBooks.has(item.bookId);
                 return (
-                  <div key={item.bookId} className="bg-card border border-border rounded-2xl p-5">
-                    {/* Tên sách */}
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="relative h-12 w-9 rounded overflow-hidden flex-shrink-0">
-                        <Image src={item.image || 'https://picsum.photos/id/24/400/600'}
-                          alt={item.title} fill className="object-cover" />
+                  <div
+                    key={item.bookId}
+                    className="rounded-3xl px-8 py-6"
+                    style={{ background: T.card, border: T.border }}
+                  >
+                    <div className="flex items-center gap-3 mb-5">
+                      <div className="relative h-12 w-9 rounded-xl overflow-hidden flex-shrink-0">
+                        <Image
+                          src={item.image || 'https://picsum.photos/id/24/400/600'}
+                          alt={item.title} fill className="object-cover"
+                        />
                       </div>
-                      <p className="font-medium text-sm text-foreground line-clamp-2">{item.title}</p>
+                      <p className="font-semibold text-[14px] line-clamp-2" style={{ color: T.text }}>
+                        {item.title}
+                      </p>
                     </div>
 
                     {isDone ? (
-                      <div className="flex items-center gap-2 text-green-600 text-sm font-medium">
+                      <div className="flex items-center gap-2 text-[14px] font-medium"
+                        style={{ color: '#16a34a' }}>
                         <CheckCircle2 className="h-4 w-4" />
                         Cảm ơn bạn đã đánh giá!
                       </div>
                     ) : (
                       <>
-                        {/* Chọn sao */}
-                        <div className="flex items-center gap-2 mb-3">
-                          <span className="text-sm text-muted-foreground">Xếp hạng:</span>
+                        <div className="flex items-center gap-2 mb-4">
+                          <span className="text-[13px]" style={{ color: T.sub }}>Xếp hạng:</span>
                           <div className="flex gap-1">
                             {[1, 2, 3, 4, 5].map((i) => (
                               <button key={i}
@@ -694,31 +897,43 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                                 <Star className={`h-6 w-6 transition-colors ${
                                   i <= (rs.hoverRating || rs.rating)
                                     ? 'fill-amber-400 text-amber-400'
-                                    : 'text-muted-foreground/30'
+                                    : 'text-gray-300'
                                 }`} />
                               </button>
                             ))}
                           </div>
-                          <span className="text-xs text-muted-foreground ml-1">
+                          <span className="text-[12px]" style={{ color: T.sub }}>
                             {['','Tệ','Không hay','Bình thường','Hay','Tuyệt vời'][rs.hoverRating || rs.rating]}
                           </span>
                         </div>
 
-                        {/* Bình luận */}
                         <textarea
                           value={rs.comment}
                           onChange={(e) => setReviewField(item.bookId, 'comment', e.target.value)}
                           placeholder="Chia sẻ cảm nhận của bạn..."
                           rows={3}
-                          className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary mb-3"
+                          className="w-full px-4 py-3 rounded-2xl text-[14px] resize-none outline-none mb-4"
+                          style={{
+                            background: T.bg,
+                            border: T.border,
+                            color: T.text,
+                          }}
                         />
 
                         <div className="flex justify-end">
-                          <Button size="sm" onClick={() => handleSubmitReview(item.bookId)}
+                          <button
+                            onClick={() => handleSubmitReview(item.bookId)}
                             disabled={rs.submitting}
-                            className="bg-primary hover:bg-primary/90 rounded-full px-5">
-                            {rs.submitting ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Đang gửi...</> : 'Gửi đánh giá'}
-                          </Button>
+                            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full text-[13px] font-medium text-white transition-opacity"
+                            style={{ background: T.accent }}
+                            onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')}
+                            onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+                          >
+                            {rs.submitting
+                              ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Đang gửi...</>
+                              : 'Gửi đánh giá'
+                            }
+                          </button>
                         </div>
                       </>
                     )}
@@ -727,25 +942,31 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               })}
             </motion.div>
           )}
+
         </div>
       </div>
 
-      {/* Dialog: Form tạo yêu cầu hoàn trả */}
+      {/* ── Dialog: Yêu cầu hoàn trả ── */}
       <Dialog open={returnDialogOpen} onOpenChange={setReturnDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md rounded-3xl">
           <DialogHeader>
-            <DialogTitle>Yêu cầu hoàn trả</DialogTitle>
-            <DialogDescription>
+            <DialogTitle style={{ color: T.text }}>Yêu cầu hoàn trả</DialogTitle>
+            <DialogDescription style={{ color: T.sub }}>
               Vui lòng cung cấp thông tin để chúng tôi xử lý yêu cầu
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="space-y-4 mt-2">
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Lý do hoàn trả</label>
+              <label className="text-[13px] font-semibold uppercase tracking-widest mb-2 block"
+                style={{ color: T.sub }}>
+                Lý do hoàn trả
+              </label>
               <Select value={returnForm.reason}
                 onValueChange={(v) => setReturnForm(prev => ({ ...prev, reason: v as ReturnReason }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger className="rounded-2xl" style={{ border: T.border }}>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   {Object.entries(REASON_LABELS).map(([key, label]) => (
                     <SelectItem key={key} value={key}>{label}</SelectItem>
@@ -753,99 +974,150 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                 </SelectContent>
               </Select>
               {returnForm.reason === 'CHANGE_MIND' && (
-                <p className="text-xs text-amber-700 mt-1.5">
+                <p className="text-[12px] mt-1.5" style={{ color: '#92400e' }}>
                   Lưu ý: lý do "đổi ý" sẽ bị trừ phí vận chuyển
                 </p>
               )}
             </div>
 
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Mô tả chi tiết (không bắt buộc)</label>
-              <textarea value={returnForm.description}
+              <label className="text-[13px] font-semibold uppercase tracking-widest mb-2 block"
+                style={{ color: T.sub }}>
+                Mô tả chi tiết (không bắt buộc)
+              </label>
+              <textarea
+                value={returnForm.description}
                 onChange={(e) => setReturnForm(prev => ({ ...prev, description: e.target.value }))}
                 placeholder="Mô tả vấn đề bạn gặp phải..."
                 rows={3}
-                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary" />
+                className="w-full px-4 py-3 rounded-2xl text-[14px] resize-none outline-none"
+                style={{ background: T.bg, border: T.border, color: T.text }}
+              />
             </div>
 
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Ảnh minh chứng (không bắt buộc)</label>
+              <label className="text-[13px] font-semibold uppercase tracking-widest mb-2 block"
+                style={{ color: T.sub }}>
+                Ảnh minh chứng (không bắt buộc)
+              </label>
               {returnForm.imageUrl ? (
                 <div className="relative">
                   <Image src={returnForm.imageUrl} alt="Ảnh"
                     width={400} height={200}
-                    className="w-full h-40 object-contain rounded-lg border border-border" />
-                  <button onClick={() => setReturnForm(prev => ({ ...prev, imageUrl: '' }))}
-                    className="absolute top-2 right-2 bg-white rounded-full p-1 shadow-md hover:bg-red-50">
-                    <X className="h-4 w-4 text-red-500" />
+                    className="w-full h-40 object-contain rounded-2xl"
+                    style={{ border: T.border }} />
+                  <button
+                    onClick={() => setReturnForm(prev => ({ ...prev, imageUrl: '' }))}
+                    className="absolute top-2 right-2 bg-white rounded-full p-1 shadow-md">
+                    <X className="h-4 w-4" style={{ color: '#dc2626' }} />
                   </button>
                 </div>
               ) : (
-                <label className="flex items-center justify-center gap-2 w-full py-6 border-2 border-dashed border-border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
-                  {uploadingImage ? (
-                    <><Loader2 className="h-4 w-4 animate-spin" /><span className="text-sm text-muted-foreground">Đang tải lên...</span></>
-                  ) : (
-                    <><Upload className="h-4 w-4 text-muted-foreground" /><span className="text-sm text-muted-foreground">Chọn ảnh</span></>
-                  )}
+                <label
+                  className="flex items-center justify-center gap-2 w-full py-6 rounded-2xl cursor-pointer transition-colors"
+                  style={{ border: '2px dashed #d2d2d7', background: 'transparent' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = T.bg)}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                >
+                  {uploadingImage
+                    ? <><Loader2 className="h-4 w-4 animate-spin" style={{ color: T.sub }} />
+                        <span className="text-[14px]" style={{ color: T.sub }}>Đang tải lên...</span></>
+                    : <><Upload className="h-4 w-4" style={{ color: T.sub }} />
+                        <span className="text-[14px]" style={{ color: T.sub }}>Chọn ảnh</span></>
+                  }
                   <input type="file" accept="image/*" className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleUploadImage(file);
-                    }}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUploadImage(f); }}
                     disabled={uploadingImage} />
                 </label>
               )}
             </div>
 
-            <div className="flex gap-2 pt-2">
-              <Button variant="outline" className="flex-1" onClick={() => setReturnDialogOpen(false)}>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setReturnDialogOpen(false)}
+                className="flex-1 py-3 rounded-full text-[14px] font-medium transition-all"
+                style={{ color: T.text, border: T.border, background: 'transparent' }}
+                onMouseEnter={e => (e.currentTarget.style.background = T.bg)}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
                 Hủy
-              </Button>
-              <Button className="flex-1" onClick={handleSubmitReturn} disabled={submittingReturn}>
-                {submittingReturn ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Đang gửi...</> : 'Gửi yêu cầu'}
-              </Button>
+              </button>
+              <button
+                onClick={handleSubmitReturn}
+                disabled={submittingReturn}
+                className="flex-1 py-3 rounded-full text-[14px] font-medium text-white transition-opacity"
+                style={{ background: T.accent }}
+                onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')}
+                onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+              >
+                {submittingReturn
+                  ? <span className="inline-flex items-center gap-2 justify-center">
+                      <Loader2 className="h-4 w-4 animate-spin" />Đang gửi...
+                    </span>
+                  : 'Gửi yêu cầu'
+                }
+              </button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Dialog: Nhập thông tin ngân hàng */}
+      {/* ── Dialog: Thông tin ngân hàng ── */}
       <Dialog open={bankDialogOpen} onOpenChange={setBankDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md rounded-3xl">
           <DialogHeader>
-            <DialogTitle>Thông tin ngân hàng</DialogTitle>
-            <DialogDescription>
+            <DialogTitle style={{ color: T.text }}>Thông tin ngân hàng</DialogTitle>
+            <DialogDescription style={{ color: T.sub }}>
               Cung cấp STK để nhận tiền hoàn
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3">
-            <div>
-              <label className="text-sm font-medium mb-1.5 block">Tên ngân hàng</label>
-              <Input value={bankForm.bankName}
-                onChange={(e) => setBankForm(prev => ({ ...prev, bankName: e.target.value }))}
-                placeholder="VD: Vietcombank, Techcombank..." />
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-1.5 block">Số tài khoản</label>
-              <Input value={bankForm.bankAccount}
-                onChange={(e) => setBankForm(prev => ({ ...prev, bankAccount: e.target.value }))}
-                placeholder="Nhập số tài khoản" />
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-1.5 block">Tên chủ tài khoản</label>
-              <Input value={bankForm.accountHolder}
-                onChange={(e) => setBankForm(prev => ({ ...prev, accountHolder: e.target.value }))}
-                placeholder="Họ và tên chủ tài khoản" />
-            </div>
+          <div className="space-y-3 mt-2">
+            {[
+              { label: 'Tên ngân hàng', key: 'bankName', placeholder: 'VD: Vietcombank, Techcombank...' },
+              { label: 'Số tài khoản', key: 'bankAccount', placeholder: 'Nhập số tài khoản' },
+              { label: 'Tên chủ tài khoản', key: 'accountHolder', placeholder: 'Họ và tên chủ tài khoản' },
+            ].map(({ label, key, placeholder }) => (
+              <div key={key}>
+                <label className="text-[13px] font-semibold uppercase tracking-widest mb-1.5 block"
+                  style={{ color: T.sub }}>
+                  {label}
+                </label>
+                <input
+                  value={(bankForm as any)[key]}
+                  onChange={e => setBankForm(prev => ({ ...prev, [key]: e.target.value }))}
+                  placeholder={placeholder}
+                  className="w-full px-4 py-2.5 rounded-2xl text-[14px] outline-none"
+                  style={{ background: T.bg, border: T.border, color: T.text }}
+                />
+              </div>
+            ))}
 
-            <div className="flex gap-2 pt-2">
-              <Button variant="outline" className="flex-1" onClick={() => setBankDialogOpen(false)}>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setBankDialogOpen(false)}
+                className="flex-1 py-3 rounded-full text-[14px] font-medium transition-all"
+                style={{ color: T.text, border: T.border, background: 'transparent' }}
+                onMouseEnter={e => (e.currentTarget.style.background = T.bg)}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
                 Hủy
-              </Button>
-              <Button className="flex-1" onClick={handleSubmitBankInfo} disabled={submittingBank}>
-                {submittingBank ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Đang lưu...</> : 'Lưu'}
-              </Button>
+              </button>
+              <button
+                onClick={handleSubmitBankInfo}
+                disabled={submittingBank}
+                className="flex-1 py-3 rounded-full text-[14px] font-medium text-white transition-opacity"
+                style={{ background: T.accent }}
+                onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')}
+                onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+              >
+                {submittingBank
+                  ? <span className="inline-flex items-center gap-2 justify-center">
+                      <Loader2 className="h-4 w-4 animate-spin" />Đang lưu...
+                    </span>
+                  : 'Lưu'
+                }
+              </button>
             </div>
           </div>
         </DialogContent>

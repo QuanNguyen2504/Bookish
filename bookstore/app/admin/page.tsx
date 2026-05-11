@@ -29,7 +29,7 @@ const fmtShort = (v: number) => {
   return String(v);
 };
 
-const COLORS = ['#0071e3', '#A67C5D', '#F4A261', '#E9C46A', '#8B7355', '#6e6e73'];
+const COLORS = ['#0071e3', '#A67C5D', '#fd0505', '#E9C46A', '#f507cd', '#6e6e73', '#0df12b'];
 
 const TOOLTIP_STYLE = {
   backgroundColor: '#ffffff',

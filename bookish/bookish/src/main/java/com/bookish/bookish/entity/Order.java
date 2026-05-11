@@ -55,6 +55,9 @@ public class Order {
     @Column(name = "shipping_fee")
     private BigDecimal shippingFee;
 
+    @Column(name = "delivered_at")
+    private LocalDateTime deliveredAt;
+
     //  MỚI: danh sách các mã khuyến mãi đã áp cho đơn này
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default

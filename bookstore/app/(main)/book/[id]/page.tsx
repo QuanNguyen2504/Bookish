@@ -9,13 +9,22 @@ import {
   ArrowLeft, ShoppingCart, BookOpen, Package, Tag,
   Users, Minus, Plus, Star,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { useCartStore } from '@/lib/store/cart-store';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { reviewApi, ReviewResponse } from '@/lib/api/review-api';
 import WishlistButton from '@/components/WishlistButton';
 import { toast } from 'sonner';
+
+// ── Design tokens (đồng bộ trang chủ) ───────────────────────────────────────
+const T = {
+  bg: '#f5f5f7',
+  card: '#ffffff',
+  border: '1px solid #d2d2d7',
+  text: '#1d1d1f',
+  sub: '#6e6e73',
+  accent: '#0071e3',
+  accentBg: 'rgba(0,113,227,0.07)',
+};
 
 interface BookResponse {
   bookId: number;
@@ -32,17 +41,19 @@ interface BookResponse {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
 
+// ── StarRating ───────────────────────────────────────────────────────────────
 function StarRating({ rating, size = 'md' }: { rating: number; size?: 'sm' | 'md' }) {
   const s = size === 'sm' ? 'h-3.5 w-3.5' : 'h-5 w-5';
   return (
     <div className="flex gap-0.5">
       {[1, 2, 3, 4, 5].map((i) => (
-        <Star key={i} className={`${s} ${i <= rating ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/30'}`} />
+        <Star key={i} className={`${s} ${i <= rating ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}`} />
       ))}
     </div>
   );
 }
 
+// ── ReviewSection ────────────────────────────────────────────────────────────
 function ReviewSection({ bookId }: { bookId: number }) {
   const { token, isAuthenticated } = useAuthStore();
   const [reviews, setReviews] = useState<ReviewResponse[]>([]);
@@ -84,24 +95,39 @@ function ReviewSection({ bookId }: { bookId: number }) {
 
   return (
     <div>
+      {/* Header đánh giá */}
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-foreground">Đánh giá & Nhận xét</h2>
+        <div>
+          <p className="text-[11px] font-semibold tracking-widest uppercase mb-1" style={{ color: T.accent }}>
+            Cộng đồng
+          </p>
+          <h2 className="font-bold tracking-[-0.02em] text-[22px]" style={{ color: T.text }}>
+            Đánh giá & Nhận xét
+          </h2>
+        </div>
         {avgRating > 0 && (
           <div className="flex items-center gap-2">
             <StarRating rating={Math.round(avgRating)} />
-            <span className="text-lg font-bold text-foreground">{avgRating.toFixed(1)}</span>
-            <span className="text-sm text-muted-foreground">({reviews.length} đánh giá)</span>
+            <span className="text-[18px] font-bold" style={{ color: T.text }}>{avgRating.toFixed(1)}</span>
+            <span className="text-[13px]" style={{ color: T.sub }}>({reviews.length} đánh giá)</span>
           </div>
         )}
       </div>
 
+      {/* Form viết đánh giá */}
       {canReview && !hasReviewed && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-          className="bg-card border border-border rounded-2xl p-6 mb-8">
-          <h3 className="font-semibold text-foreground mb-4">Viết đánh giá của bạn</h3>
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-3xl p-6 mb-6"
+          style={{ background: T.card, border: T.border }}
+        >
+          <p className="font-semibold text-[15px] mb-4" style={{ color: T.text }}>
+            Viết đánh giá của bạn
+          </p>
 
           <div className="flex items-center gap-2 mb-4">
-            <span className="text-sm text-muted-foreground">Xếp hạng:</span>
+            <span className="text-[13px]" style={{ color: T.sub }}>Xếp hạng:</span>
             <div className="flex gap-1">
               {[1, 2, 3, 4, 5].map((i) => (
                 <button key={i}
@@ -113,12 +139,12 @@ function ReviewSection({ bookId }: { bookId: number }) {
                   <Star className={`h-7 w-7 transition-colors ${
                     i <= (hoverRating || rating)
                       ? 'fill-amber-400 text-amber-400'
-                      : 'text-muted-foreground/30'
+                      : 'text-gray-300'
                   }`} />
                 </button>
               ))}
             </div>
-            <span className="text-sm font-medium text-foreground ml-1">
+            <span className="text-[13px] font-medium ml-1" style={{ color: T.text }}>
               {['', 'Tệ', 'Không hay', 'Bình thường', 'Hay', 'Tuyệt vời'][hoverRating || rating]}
             </span>
           </div>
@@ -128,71 +154,98 @@ function ReviewSection({ bookId }: { bookId: number }) {
             onChange={(e) => setComment(e.target.value)}
             placeholder="Chia sẻ cảm nhận của bạn về cuốn sách này..."
             rows={4}
-            className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full px-4 py-3 rounded-2xl text-[14px] resize-none outline-none"
+            style={{ background: T.bg, border: T.border, color: T.text }}
           />
 
           <div className="flex justify-end mt-3">
-            <Button onClick={handleSubmit} disabled={submitting}
-              className="bg-primary hover:bg-primary/90 rounded-full px-6">
+            <button
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full text-[14px] font-medium text-white transition-opacity"
+              style={{ background: T.accent }}
+              onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')}
+              onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+            >
               {submitting ? 'Đang gửi...' : 'Gửi đánh giá'}
-            </Button>
+            </button>
           </div>
         </motion.div>
       )}
 
+      {/* Đã đánh giá */}
       {hasReviewed && (
-        <div className="bg-green-50 border border-green-200 rounded-2xl px-5 py-3 mb-8 text-sm text-green-700 font-medium">
-          ✓ Bạn đã đánh giá cuốn sách này
+        <div className="rounded-3xl px-5 py-3 mb-6 text-[14px] font-medium flex items-center gap-2"
+          style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534' }}>
+          <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+          Bạn đã đánh giá cuốn sách này
         </div>
       )}
 
+      {/* Chưa đăng nhập */}
       {!isAuthenticated && (
-        <div className="bg-muted/50 rounded-2xl px-5 py-4 mb-8 text-sm text-muted-foreground">
-          <Link href="/login" className="text-primary hover:underline font-medium">Đăng nhập</Link>
+        <div className="rounded-3xl px-5 py-4 mb-6 text-[14px]"
+          style={{ background: T.bg, border: T.border, color: T.sub }}>
+          <Link href="/login" className="font-semibold transition-opacity"
+            style={{ color: T.accent }}
+            onMouseEnter={e => (e.currentTarget.style.opacity = '0.7')}
+            onMouseLeave={e => (e.currentTarget.style.opacity = '1')}>
+            Đăng nhập
+          </Link>
           {' '}để viết đánh giá (chỉ áp dụng cho khách hàng đã mua sách)
         </div>
       )}
 
+      {/* Danh sách review */}
       {reviews.length === 0 ? (
-        <div className="text-center py-10 text-muted-foreground">
-          <Star className="h-10 w-10 mx-auto mb-3 opacity-30" />
-          <p>Chưa có đánh giá nào. Hãy là người đầu tiên!</p>
+        <div className="text-center py-10">
+          <Star className="h-10 w-10 mx-auto mb-3 opacity-20" style={{ color: T.sub }} />
+          <p className="text-[14px]" style={{ color: T.sub }}>Chưa có đánh giá nào. Hãy là người đầu tiên!</p>
         </div>
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-4">
           {reviews.map((review) => (
-            <motion.div key={review.reviewId}
-              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-              className="bg-card border border-border rounded-2xl p-5">
+            <motion.div
+              key={review.reviewId}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-3xl p-5"
+              style={{ background: T.card, border: T.border }}
+            >
               <div className="flex items-start gap-3">
-                <div className="relative h-10 w-10 rounded-full overflow-hidden bg-primary/10 flex-shrink-0">
+                <div
+                  className="relative h-10 w-10 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center"
+                  style={{ background: T.accentBg }}
+                >
                   {review.avatarUrl ? (
                     <Image src={review.avatarUrl} alt={review.username} fill className="object-cover" />
                   ) : (
-                    <div className="h-full w-full flex items-center justify-center">
-                      <span className="text-primary font-bold text-sm">
-                        {review.username.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
+                    <span className="font-bold text-[13px]" style={{ color: T.accent }}>
+                      {review.username.charAt(0).toUpperCase()}
+                    </span>
                   )}
                 </div>
 
                 <div className="flex-1">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div>
-                      <span className="font-semibold text-foreground text-sm">{review.username}</span>
+                      <span className="font-semibold text-[14px]" style={{ color: T.text }}>
+                        {review.username}
+                      </span>
                       <div className="mt-0.5">
                         <StarRating rating={review.rating} size="sm" />
                       </div>
                     </div>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-[12px]" style={{ color: T.sub }}>
                       {new Date(review.createdAt).toLocaleDateString('vi-VN', {
                         day: '2-digit', month: '2-digit', year: 'numeric',
                       })}
                     </span>
                   </div>
                   {review.comment && (
-                    <p className="mt-2 text-sm text-foreground leading-relaxed">{review.comment}</p>
+                    <p className="mt-2 text-[14px] leading-relaxed" style={{ color: T.text }}>
+                      {review.comment}
+                    </p>
                   )}
                 </div>
               </div>
@@ -204,6 +257,59 @@ function ReviewSection({ bookId }: { bookId: number }) {
   );
 }
 
+// ── TabSection ───────────────────────────────────────────────────────────────
+function TabSection({ book }: { book: BookResponse }) {
+  const [activeTab, setActiveTab] = useState<'info' | 'reviews'>('info');
+
+  return (
+    <div className="rounded-3xl overflow-hidden" style={{ background: T.card, border: T.border }}>
+      {/* Tab bar */}
+      <div className="flex" style={{ borderBottom: T.border }}>
+        {(['info', 'reviews'] as const).map((tab) => {
+          const label = tab === 'info' ? 'Thông tin chi tiết' : 'Bình luận';
+          const active = activeTab === tab;
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className="px-6 py-4 text-[13px] font-semibold uppercase tracking-widest transition-all"
+              style={{
+                background: active ? T.accent : 'transparent',
+                color: active ? '#ffffff' : T.sub,
+              }}
+              onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = T.bg; }}
+              onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Tab content */}
+      <div className="px-8 py-8">
+        {activeTab === 'info' && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            {book.description ? (
+              <p className="text-[15px] leading-relaxed whitespace-pre-line" style={{ color: T.text }}>
+                {book.description}
+              </p>
+            ) : (
+              <p className="text-[15px]" style={{ color: T.sub }}>Chưa có thông tin chi tiết.</p>
+            )}
+          </motion.div>
+        )}
+        {activeTab === 'reviews' && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <ReviewSection bookId={book.bookId} />
+          </motion.div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Main page ────────────────────────────────────────────────────────────────
 export default function BookDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -231,7 +337,7 @@ export default function BookDetailPage() {
     fetchBook();
   }, [id]);
 
-  const salePrice = book ? book.price * (1 - (book.salePercent ?? 0) / 100) : 0;
+  const salePrice = book ? Math.round(book.price * (1 - (book.salePercent ?? 0) / 100)) : 0;
 
   const handleAddToCart = async () => {
     if (!book) return;
@@ -253,66 +359,106 @@ export default function BookDetailPage() {
       return;
     }
     const result = await addItem(book.bookId, quantity, token);
-    if (result.success) {
-      router.push('/checkout');
-    } else {
-      toast.error(result.message);
-    }
+    if (result.success) router.push('/checkout');
+    else toast.error(result.message);
   };
 
+  // ── Loading ──────────────────────────────────────────────────────────────
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <motion.div animate={{ rotate: 360 }}
+    <div className="min-h-screen flex items-center justify-center" style={{ background: T.bg }}>
+      <motion.div
+        animate={{ rotate: 360 }}
         transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-        className="h-10 w-10 rounded-full border-4 border-primary border-t-transparent" />
+        className="h-10 w-10 rounded-full border-4 border-t-transparent"
+        style={{ borderColor: T.accent, borderTopColor: 'transparent' }}
+      />
     </div>
   );
 
+  // ── Error ────────────────────────────────────────────────────────────────
   if (error || !book) return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-4">
-      <BookOpen className="h-16 w-16 text-muted-foreground" />
-      <p className="text-lg text-muted-foreground">{error ?? 'Không tìm thấy sách'}</p>
-      <Button onClick={() => router.back()} variant="outline" className="rounded-full">
-        <ArrowLeft className="mr-2 h-4 w-4" /> Quay lại
-      </Button>
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ background: T.bg }}>
+      <BookOpen className="h-16 w-16" style={{ color: T.sub }} />
+      <p className="text-[16px]" style={{ color: T.sub }}>{error ?? 'Không tìm thấy sách'}</p>
+      <button
+        onClick={() => router.back()}
+        className="inline-flex items-center gap-2 px-6 py-3 rounded-full text-[14px] font-medium transition-all"
+        style={{ color: T.accent, border: `1.5px solid ${T.accent}`, background: 'transparent' }}
+        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = T.accent; (e.currentTarget as HTMLElement).style.color = '#fff'; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = T.accent; }}
+      >
+        <ArrowLeft className="h-4 w-4" /> Quay lại
+      </button>
     </div>
   );
 
+  // ── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-background pb-16">
-      <div className="container mx-auto px-4 py-8">
+    <div style={{ background: T.bg, minHeight: '100vh' }}>
+      <div className="max-w-[1200px] mx-auto px-6 py-10 pb-20">
 
         {/* Breadcrumb */}
-        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-          className="flex items-center gap-2 text-sm text-muted-foreground mb-8">
-          <Link href="/" className="hover:text-primary transition-colors">Trang chủ</Link>
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-center gap-2 mb-8 text-[13px]"
+          style={{ color: T.sub }}
+        >
+          <Link href="/" style={{ color: T.sub }}
+            onMouseEnter={e => (e.currentTarget.style.color = T.accent)}
+            onMouseLeave={e => (e.currentTarget.style.color = T.sub)}>
+            Trang chủ
+          </Link>
           <span>/</span>
-          <Link href="/shop" className="hover:text-primary transition-colors">Cửa hàng</Link>
+          <Link href="/shop" style={{ color: T.sub }}
+            onMouseEnter={e => (e.currentTarget.style.color = T.accent)}
+            onMouseLeave={e => (e.currentTarget.style.color = T.sub)}>
+            Cửa hàng
+          </Link>
           <span>/</span>
-          <span className="text-foreground line-clamp-1">{book.title}</span>
+          <span className="font-medium line-clamp-1" style={{ color: T.text }}>{book.title}</span>
         </motion.div>
 
-        <div className="grid lg:grid-cols-2 gap-10 lg:gap-16">
+        {/* ── Grid: Ảnh + Thông tin ── */}
+        <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 mb-12">
 
           {/* Ảnh bìa */}
-          <motion.div initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5 }} className="flex justify-center">
+          <motion.div
+            initial={{ opacity: 0, x: -30 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5 }}
+            className="flex justify-center"
+          >
             <div className="relative w-full max-w-sm">
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-accent/20 rounded-3xl blur-2xl scale-110" />
-              <div className="relative aspect-[3/4] rounded-2xl overflow-hidden shadow-2xl border border-border">
-                <Image src={book.image || 'https://picsum.photos/id/24/400/600'} alt={book.title}
-                  fill className="object-cover" sizes="(max-width: 768px) 80vw, 400px" priority />
+              {/* Glow effect */}
+              <div
+                className="absolute inset-0 rounded-3xl blur-2xl scale-110"
+                style={{ background: `linear-gradient(135deg, ${T.accentBg}, rgba(0,113,227,0.12))` }}
+              />
+              <div className="relative aspect-[3/4] rounded-3xl overflow-hidden shadow-2xl" style={{ border: T.border }}>
+                <Image
+                  src={book.image || 'https://picsum.photos/id/24/400/600'}
+                  alt={book.title}
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 768px) 80vw, 400px"
+                  priority
+                />
 
-                {/*  Nút trái tim góc trên bên phải ảnh */}
+                {/* Wishlist button */}
                 <div className="absolute top-4 right-4 z-10">
                   <WishlistButton bookId={book.bookId} variant="icon" size="lg" />
                 </div>
 
+                {/* Badge giảm giá */}
                 {book.salePercent > 0 && (
                   <div className="absolute top-4 left-4">
-                    <Badge className="bg-accent text-accent-foreground font-bold text-base px-3 py-1">
+                    <span
+                      className="flex items-center justify-center w-12 h-12 rounded-full text-[13px] font-bold text-white shadow-lg"
+                      style={{ background: '#ff3b30' }}
+                    >
                       -{book.salePercent}%
-                    </Badge>
+                    </span>
                   </div>
                 )}
               </div>
@@ -320,30 +466,50 @@ export default function BookDetailPage() {
           </motion.div>
 
           {/* Thông tin sách */}
-          <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }} className="flex flex-col gap-6">
-
+          <motion.div
+            initial={{ opacity: 0, x: 30 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="flex flex-col gap-5"
+          >
+            {/* Categories */}
             {book.categories?.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {book.categories.map((cat) => (
-                  <Badge key={cat} variant="outline" className="text-secondary border-secondary/50">{cat}</Badge>
+                  <span
+                    key={cat}
+                    className="px-3 py-1 rounded-full text-[12px] font-medium"
+                    style={{ background: T.accentBg, color: T.accent, border: `1px solid rgba(0,113,227,0.2)` }}
+                  >
+                    {cat}
+                  </span>
                 ))}
               </div>
             )}
 
-            <h1 className="text-3xl md:text-4xl font-bold text-foreground leading-tight">
+            {/* Tiêu đề */}
+            <h1
+              className="font-bold tracking-[-0.03em] leading-tight"
+              style={{ fontSize: 'clamp(24px, 3.5vw, 38px)', color: T.text }}
+            >
               {book.title}
             </h1>
 
+            {/* Tác giả */}
             {book.authors?.length > 0 && (
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Users className="h-4 w-4 shrink-0" />
-                <span className="text-sm">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 flex-shrink-0" style={{ color: T.sub }} />
+                <span className="text-[14px]" style={{ color: T.sub }}>
                   Tác giả:{' '}
                   {book.authors.map((author, index) => (
                     <span key={author}>
-                      <Link href={`/author/${encodeURIComponent(author)}`}
-                        className="text-primary font-medium hover:underline transition-colors">
+                      <Link
+                        href={`/author/${encodeURIComponent(author)}`}
+                        className="font-semibold transition-opacity"
+                        style={{ color: T.accent }}
+                        onMouseEnter={e => (e.currentTarget.style.opacity = '0.7')}
+                        onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+                      >
                         {author}
                       </Link>
                       {index < book.authors.length - 1 && ', '}
@@ -353,139 +519,148 @@ export default function BookDetailPage() {
               </div>
             )}
 
-            <div className="h-px bg-border" />
+            {/* Divider */}
+            <div style={{ height: 1, background: '#d2d2d7' }} />
 
+            {/* Giá */}
             <div className="flex items-end gap-3">
-              <span className="text-4xl font-bold text-primary">
+              <span
+                className="font-bold tracking-[-0.02em]"
+                style={{ fontSize: 'clamp(28px, 4vw, 40px)', color: T.accent }}
+              >
                 {salePrice.toLocaleString('vi-VN')}đ
               </span>
               {book.salePercent > 0 && (
-                <span className="text-xl text-muted-foreground line-through mb-1">
+                <span className="text-[18px] line-through mb-1" style={{ color: T.sub }}>
                   {book.price.toLocaleString('vi-VN')}đ
                 </span>
               )}
             </div>
 
+            {/* Tồn kho + giảm giá */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="flex items-center gap-2 bg-muted/50 rounded-xl p-3">
-                <Package className="h-4 w-4 text-primary shrink-0" />
+              <div
+                className="flex items-center gap-3 rounded-2xl p-4"
+                style={{ background: T.bg, border: T.border }}
+              >
+                <div
+                  className="h-8 w-8 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ background: T.accentBg }}
+                >
+                  <Package className="h-4 w-4" style={{ color: T.accent }} />
+                </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Tồn kho</p>
-                  <p className="text-sm font-semibold text-foreground">{book.stock} cuốn</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: T.sub }}>
+                    Số lượng còn
+                  </p>
+                  <p className="text-[14px] font-semibold" style={{ color: T.text }}>
+                    {book.stock} cuốn
+                  </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 bg-muted/50 rounded-xl p-3">
-                <Tag className="h-4 w-4 text-primary shrink-0" />
+              <div
+                className="flex items-center gap-3 rounded-2xl p-4"
+                style={{ background: T.bg, border: T.border }}
+              >
+                <div
+                  className="h-8 w-8 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ background: T.accentBg }}
+                >
+                  <Tag className="h-4 w-4" style={{ color: T.accent }} />
+                </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Giảm giá</p>
-                  <p className="text-sm font-semibold text-foreground">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: T.sub }}>
+                    Giảm giá
+                  </p>
+                  <p className="text-[14px] font-semibold" style={{ color: T.text }}>
                     {book.salePercent > 0 ? `${book.salePercent}%` : 'Không có'}
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="h-px bg-border" />
+            {/* Divider */}
+            <div style={{ height: 1, background: '#d2d2d7' }} />
 
+            {/* Số lượng */}
             <div className="flex items-center gap-4">
-              <span className="text-sm font-medium text-foreground">Số lượng:</span>
-              <div className="flex items-center gap-2 bg-muted rounded-full px-2 py-1">
-                <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full"
-                  onClick={() => setQuantity((q) => Math.max(1, q - 1))} disabled={quantity <= 1}>
+              <span className="text-[14px] font-medium" style={{ color: T.text }}>Số lượng:</span>
+              <div
+                className="flex items-center gap-2 rounded-full px-2 py-1"
+                style={{ background: T.bg, border: T.border }}
+              >
+                <button
+                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                  disabled={quantity <= 1}
+                  className="h-8 w-8 rounded-full flex items-center justify-center transition-all disabled:opacity-40"
+                  style={{ color: T.text }}
+                  onMouseEnter={e => (e.currentTarget.style.background = '#e8e8ed')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                >
                   <Minus className="h-3 w-3" />
-                </Button>
-                <span className="w-8 text-center font-semibold text-foreground">{quantity}</span>
-                <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full"
-                  onClick={() => setQuantity((q) => Math.min(book.stock, q + 1))} disabled={quantity >= book.stock}>
+                </button>
+                <span className="w-8 text-center font-semibold text-[15px]" style={{ color: T.text }}>
+                  {quantity}
+                </span>
+                <button
+                  onClick={() => setQuantity((q) => Math.min(book.stock, q + 1))}
+                  disabled={quantity >= book.stock}
+                  className="h-8 w-8 rounded-full flex items-center justify-center transition-all disabled:opacity-40"
+                  style={{ color: T.text }}
+                  onMouseEnter={e => (e.currentTarget.style.background = '#e8e8ed')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                >
                   <Plus className="h-3 w-3" />
-                </Button>
+                </button>
               </div>
-              <span className="text-xs text-muted-foreground">Còn {book.stock} sản phẩm</span>
+              <span className="text-[13px]" style={{ color: T.sub }}>Còn {book.stock} sản phẩm</span>
             </div>
 
-            {/*  Hàng nút: Thêm vào giỏ + Wishlist button (icon) */}
+            {/* Nút Thêm vào giỏ + Wishlist */}
             <div className="flex gap-3 items-center">
-              <Button onClick={handleAddToCart} disabled={book.stock === 0 || cartLoading}
-                className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground rounded-full py-6 text-base font-semibold shadow-lg shadow-primary/20">
-                <ShoppingCart className="mr-2 h-5 w-5" />
+              <button
+                onClick={handleAddToCart}
+                disabled={book.stock === 0 || cartLoading}
+                className="flex-1 inline-flex items-center justify-center gap-2 py-4 rounded-full text-[15px] font-semibold text-white transition-opacity disabled:opacity-50"
+                style={{ background: T.accent }}
+                onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')}
+                onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+              >
+                <ShoppingCart className="h-5 w-5" />
                 {book.stock === 0 ? 'Hết hàng' : 'Thêm vào giỏ hàng'}
-              </Button>
-
-              {/*  Thay thế nút Heart cũ */}
+              </button>
               <WishlistButton bookId={book.bookId} variant="icon" size="lg" />
             </div>
 
             {/* Nút mua ngay */}
             {book.stock > 0 && (
-              <Button
+              <button
                 onClick={handleBuyNow}
                 disabled={cartLoading}
-                variant="outline"
-                className="w-full rounded-full py-6 text-base font-semibold border-primary text-primary hover:bg-primary hover:text-primary-foreground"
+                className="w-full py-4 rounded-full text-[15px] font-semibold transition-all disabled:opacity-50"
+                style={{ color: T.accent, border: `1.5px solid ${T.accent}`, background: 'transparent' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = T.accent; (e.currentTarget as HTMLElement).style.color = '#fff'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = T.accent; }}
               >
                 Mua ngay
-              </Button>
+              </button>
             )}
 
-            <Button variant="ghost" onClick={() => router.back()}
-              className="self-start text-muted-foreground hover:text-foreground -ml-2">
-              <ArrowLeft className="mr-2 h-4 w-4" /> Quay lại
-            </Button>
+            {/* Quay lại */}
+            <button
+              onClick={() => router.back()}
+              className="self-start inline-flex items-center gap-2 text-[14px] transition-colors"
+              style={{ color: T.sub }}
+              onMouseEnter={e => (e.currentTarget.style.color = T.text)}
+              onMouseLeave={e => (e.currentTarget.style.color = T.sub)}
+            >
+              <ArrowLeft className="h-4 w-4" /> Quay lại
+            </button>
           </motion.div>
         </div>
-      </div>
 
-      {/* Tab: Thông tin chi tiết / Bình luận */}
-      <div className="container mx-auto px-4 mt-12">
+        {/* ── Tab: Chi tiết / Bình luận ── */}
         <TabSection book={book} />
-      </div>
-    </div>
-  );
-}
-
-function TabSection({ book }: { book: BookResponse }) {
-  const [activeTab, setActiveTab] = useState<'info' | 'reviews'>('info');
-
-  return (
-    <div className="border border-border rounded-2xl overflow-hidden">
-      <div className="flex border-b border-border">
-        <button
-          onClick={() => setActiveTab('info')}
-          className={`px-6 py-3 text-sm font-semibold uppercase tracking-wide transition-colors ${
-            activeTab === 'info'
-              ? 'bg-primary text-primary-foreground'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-          }`}
-        >
-          Thông tin chi tiết
-        </button>
-        <button
-          onClick={() => setActiveTab('reviews')}
-          className={`px-6 py-3 text-sm font-semibold uppercase tracking-wide transition-colors ${
-            activeTab === 'reviews'
-              ? 'bg-primary text-primary-foreground'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-          }`}
-        >
-          Bình luận
-        </button>
-      </div>
-
-      <div className="p-6 bg-card">
-        {activeTab === 'info' && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            {book.description ? (
-              <p className="text-foreground leading-relaxed whitespace-pre-line">{book.description}</p>
-            ) : (
-              <p className="text-muted-foreground">Chưa có thông tin chi tiết.</p>
-            )}
-          </motion.div>
-        )}
-        {activeTab === 'reviews' && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <ReviewSection bookId={book.bookId} />
-          </motion.div>
-        )}
       </div>
     </div>
   );

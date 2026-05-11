@@ -63,6 +63,9 @@ public enum ErrorCode {
     PROMOTION_ALREADY_USED(400, "Bạn đã sử dụng mã khuyến mãi này rồi", HttpStatus.BAD_REQUEST),
     PROMOTION_TYPE_CONFLICT(400, "Chỉ được áp dụng 1 mã cho mỗi loại khuyến mãi", HttpStatus.BAD_REQUEST),
 
+    INVALID_SHIPPING_ADDRESS(400, "Địa chỉ giao hàng không hợp lệ", HttpStatus.BAD_REQUEST),
+    SHIPPING_CALCULATION_FAILED(500, "Không thể tính phí vận chuyển", HttpStatus.INTERNAL_SERVER_ERROR),
+    SHIPPING_ROUTE_NOT_FOUND(400, "Không tìm thấy địa chỉ này", HttpStatus.BAD_REQUEST),
     // ORDER
     ORDER_NOT_FOUND(404, "Không tìm thấy đơn hàng", HttpStatus.NOT_FOUND),
     ORDER_EMPTY_ITEMS(400, "Không có sản phẩm nào được chọn", HttpStatus.BAD_REQUEST),

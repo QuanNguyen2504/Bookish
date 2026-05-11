@@ -323,7 +323,7 @@ export default function AdminBooksPage() {
                   <TableHead>Danh mục</TableHead>
                   <TableHead className="text-right">Giá</TableHead>
                   <TableHead className="text-center">Giảm %</TableHead>
-                  <TableHead className="text-center">Kho</TableHead>
+                  <TableHead className="text-center">Số lượng</TableHead>
                   <TableHead className="text-right">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>

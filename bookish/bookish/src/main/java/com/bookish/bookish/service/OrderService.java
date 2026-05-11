@@ -33,9 +33,9 @@ public class OrderService {
     private final OrderNotificationService orderNotificationService;
     private final PromotionService promotionService;
     private final NotificationService notificationService;
+    private final ShippingService shippingService;
 
     private static final int QR_EXPIRY_MINUTES = 4;
-    private static final BigDecimal SHIPPING_FEE = BigDecimal.valueOf(50000);
 
     @Transactional
     public OrderResponse checkout(Integer userId, CheckoutRequest req) {
@@ -58,7 +58,14 @@ public class OrderService {
                 })
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal shippingFee = SHIPPING_FEE;
+        BigDecimal shippingFee;
+        try {
+            ShippingFeeResponse shippingResult = shippingService.calculateShippingFee(req.getShippingAddress());
+            shippingFee = shippingResult.getShippingFee();
+        } catch (Exception e) {
+            // Fallback nếu Nominatim lỗi → dùng phí mặc định 50k
+            shippingFee = shippingService.getDefaultShippingFee();
+        }
 
         Order order = Order.builder()
                 .user(user)
@@ -292,6 +299,7 @@ public class OrderService {
         if (!"SHIPPING".equals(order.getStatus()))
             throw new AppException(ErrorCode.ORDER_NOT_SHIPPING);
         order.setStatus("DELIVERED");
+        order.setDeliveredAt(LocalDateTime.now());
         orderRepository.save(order);
         return toResponse(order, orderItemRepository.findByOrder(order));
     }

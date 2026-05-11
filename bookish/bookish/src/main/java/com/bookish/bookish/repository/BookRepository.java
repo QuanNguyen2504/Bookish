@@ -13,7 +13,6 @@ import java.util.List;
 @Repository
 public interface BookRepository extends JpaRepository<Book, Integer> {
 
-
     List<Book> findByTitleContainingIgnoreCase(String keyword);
 
     @Query("SELECT DISTINCT b FROM Book b JOIN b.categories c WHERE LOWER(c.name) LIKE LOWER(CONCAT('%', :categoryName, '%'))")
@@ -44,13 +43,23 @@ public interface BookRepository extends JpaRepository<Book, Integer> {
     @Query("SELECT b FROM Book b WHERE b.deleted = false ORDER BY b.createdAt DESC")
     List<Book> findActiveNewest(Pageable pageable);
 
-    // ===================== PHÂN TRANG MỚI =====================
+    /**
+     * Dùng riêng cho chatbot cache: JOIN FETCH authors và categories trong 1 query
+     * → tránh lỗi LazyInitializationException khi đọc ngoài session
+     */
+    @Query("""
+        SELECT DISTINCT b FROM Book b
+        LEFT JOIN FETCH b.authors
+        LEFT JOIN FETCH b.categories
+        WHERE b.deleted = false
+    """)
+    List<Book> findAllActiveWithDetails();
 
-    /** Admin: phân trang tất cả sách (kể cả deleted), tìm kiếm theo tên */
+    // ===================== PHÂN TRANG =====================
+
     @Query("SELECT b FROM Book b WHERE (:keyword IS NULL OR LOWER(b.title) LIKE LOWER(CONCAT('%', :keyword, '%')))")
     Page<Book> findAllPaged(@Param("keyword") String keyword, Pageable pageable);
 
-    /** Admin: phân trang + lọc theo danh mục */
     @Query("""
         SELECT DISTINCT b FROM Book b
         JOIN b.categories c
@@ -63,7 +72,6 @@ public interface BookRepository extends JpaRepository<Book, Integer> {
             Pageable pageable
     );
 
-    /** User: phân trang sách chưa xóa, tìm kiếm + lọc danh mục */
     @Query("""
         SELECT DISTINCT b FROM Book b
         LEFT JOIN b.categories c

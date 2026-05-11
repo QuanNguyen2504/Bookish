@@ -32,7 +32,11 @@ function BannerSlider() {
   return (
     <div
       className="relative w-full overflow-hidden select-none"
-      style={{ aspectRatio: '16/6', background: '#f5f5f7' }}
+      style={{
+        aspectRatio: '16/6',
+        borderRadius: '24px',
+        background: '#e8e8ed',
+      }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
@@ -190,12 +194,17 @@ export default function HomePage() {
   }, []);
 
   return (
-    <div>
-      {/* ── Banner Slider ── */}
-      <BannerSlider />
+    <div style={{ background: '#f5f5f7' }}>
 
-      {/* ── Sách Nổi Bật ── white bg */}
-      <section className="py-4" style={{ background: '#f5f5f7' }}>
+      {/* ── Banner Slider ── contained, not full-width */}
+      <section className="pt-6 pb-4">
+        <div className="max-w-[1200px] mx-auto px-6">
+          <BannerSlider />
+        </div>
+      </section>
+
+      {/* ── Sách Nổi Bật ── */}
+      <section className="py-4">
         <div className="max-w-[1200px] mx-auto px-6">
           <motion.div
             initial={{ opacity: 0, y: 24 }}
@@ -243,8 +252,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── Sách Bán Chạy ── gray bg */}
-      <section className="py-4 pb-8" style={{ background: '#f5f5f7' }}>
+      {/* ── Sách Bán Chạy ── */}
+      <section className="py-4 pb-8">
         <div className="max-w-[1200px] mx-auto px-6">
           <motion.div
             initial={{ opacity: 0, y: 24 }}
@@ -345,6 +354,7 @@ export default function HomePage() {
           </motion.div>
         </div>
       </section>
+
     </div>
   );
 }

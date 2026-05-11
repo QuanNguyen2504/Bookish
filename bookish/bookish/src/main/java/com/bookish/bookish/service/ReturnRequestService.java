@@ -37,10 +37,8 @@ public class ReturnRequestService {
 
     private static final int RETURN_WINDOW_DAYS = 7;
 
-    // ========================================================
-    // USER APIs
-    // ========================================================
 
+    // USER APIs
     /** User gửi yêu cầu hoàn trả */
     @Transactional
     public ReturnRequestResponse createRequest(Integer userId, CreateReturnRequest req) {
@@ -55,11 +53,12 @@ public class ReturnRequestService {
         if (!"DELIVERED".equals(order.getStatus()))
             throw new AppException(ErrorCode.RETURN_ORDER_NOT_DELIVERED);
 
-        // Quá 7 ngày từ khi đơn DELIVERED thì không cho hoàn
-        // Dùng updatedAt hoặc createdAt — ở đây dùng createdAt của đơn
-        // (đồ án không lưu deliveredAt riêng, có thể cải tiến sau)
-        if (order.getCreatedAt().plusDays(RETURN_WINDOW_DAYS).isBefore(LocalDateTime.now()))
+        // Quá 2 ngày từ khi đơn DELIVERED thì không cho hoàn
+
+        if (order.getDeliveredAt() == null ||
+                order.getDeliveredAt().plusDays(RETURN_WINDOW_DAYS).isBefore(LocalDateTime.now())) {
             throw new AppException(ErrorCode.RETURN_WINDOW_EXPIRED);
+        }
 
         if (returnRepo.existsByOrder(order))
             throw new AppException(ErrorCode.RETURN_ALREADY_EXISTS);
@@ -134,9 +133,7 @@ public class ReturnRequestService {
         return toResponse(returnRepo.save(r));
     }
 
-    // ========================================================
-    // ADMIN APIs
-    // ========================================================
+
 
     @Transactional(readOnly = true)
     public List<ReturnRequestResponse> getAllRequests() {

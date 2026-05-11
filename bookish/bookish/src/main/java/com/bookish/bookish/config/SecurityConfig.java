@@ -28,7 +28,7 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        // AUTH (bao gồm /auth/verify-email và /auth/resend-verification)
+                        // AUTH
                         .requestMatchers("/auth/**").permitAll()
 
                         // PUBLIC
@@ -37,33 +37,36 @@ public class SecurityConfig {
                         .requestMatchers("/books").permitAll()
                         .requestMatchers("/books/*").permitAll()
                         .requestMatchers("/uploads/**").permitAll()
-                        // PROMOTIONS — GET public, validate cần login, CUD chỉ ADMIN/STAFF
+
+                        // PROMOTIONS
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/promotions").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/promotions/*").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/promotions/validate").authenticated()
                         .requestMatchers("/promotions/**").hasAnyAuthority("ADMIN", "STAFF")
                         .requestMatchers("/promotions/all").hasAnyAuthority("ADMIN", "STAFF")
+
                         .requestMatchers("/api/cart/**").permitAll()
                         .requestMatchers("/api/orders/**").permitAll()
                         .requestMatchers("/ws/**").permitAll()
-
                         .requestMatchers("/api/webhook/**").permitAll()
-                        .requestMatchers("/api/chatbot").permitAll()
+                        .requestMatchers("/api/shipping/**").permitAll()
 
-                        // REVIEW — GET public, POST cần login
+                        // CHATBOT — permit cả POST chat lẫn GET cache (debug)
+                        .requestMatchers("/api/chatbot").permitAll()
+                        .requestMatchers("/api/chatbot/**").permitAll()
+
+                        // REVIEW
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/reviews/**").permitAll()
                         .requestMatchers("/api/reviews/**").authenticated()
 
-                        //  MỚI: WISHLIST — chỉ user đã đăng nhập
+                        // WISHLIST
                         .requestMatchers("/api/wishlist/**").authenticated()
 
-                        // RETURN — user cần đăng nhập
+                        // RETURN
                         .requestMatchers("/api/returns/**").authenticated()
 
-                        // Cho phép user đã login upload/xóa avatar
+                        // AVATAR & PASSWORD
                         .requestMatchers("/users/*/avatar").authenticated()
-
-                        // Đổi mật khẩu — user tự đổi
                         .requestMatchers("/customers/*/change-password").authenticated()
 
                         // ADMIN + STAFF only
@@ -73,7 +76,7 @@ public class SecurityConfig {
                         .requestMatchers("/books/**").hasAnyAuthority("ADMIN", "STAFF")
                         .requestMatchers("/customers/**").hasAnyAuthority("ADMIN", "STAFF")
                         .requestMatchers("/staff/**").hasAnyAuthority("ADMIN", "STAFF")
-                        .requestMatchers( "/books/admin/**").hasAnyAuthority("ADMIN", "STAFF")
+                        .requestMatchers("/books/admin/**").hasAnyAuthority("ADMIN", "STAFF")
 
                         .anyRequest().authenticated()
                 )
